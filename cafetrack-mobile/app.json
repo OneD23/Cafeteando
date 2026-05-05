@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "CaféTrack Mobile",
+    "slug": "cafetrack-mobile",
+    "version": "2.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a0f0a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.cafetrack.mobile"
+    },
+    "android": {
+      "package": "com.cafetrack.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a0f0a"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir a CaféTrack acceder a la cámara."
+        }
+      ]
+    ]
+  }
+}
