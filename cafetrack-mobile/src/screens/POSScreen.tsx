@@ -19,7 +19,7 @@ import { PaymentModal } from "../components/PaymentModal";
 const POSScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { items: cartItems, totals, processingSale } = useSelector((state: any) => state.cart);
-  const { products, recipes } = useSelector((state: any) => state.recipes);
+  const { products, recipes, loading: loadingProducts, error: productsError } = useSelector((state: any) => state.recipes);
   const { ingredients } = useSelector((state: any) => state.inventory);
   
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -204,7 +204,7 @@ const POSScreen: React.FC = () => {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No hay productos para mostrar</Text>
             <Text style={styles.emptyStateSubtitle}>
-              Verifica búsqueda, categorías o inventario disponible.
+              {loadingProducts ? 'Cargando productos...' : productsError ? productsError : 'Verifica búsqueda, categorías o inventario disponible.'}
             </Text>
           </View>
         }
