@@ -2,11 +2,13 @@ import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Modal, TextInput, Alert } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../store/authSlice";
+import { setTaxEnabled } from "../store/cartSlice";
 import { api } from "../api/client";
 
 const SettingsScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: any) => state.auth);
+  const { taxEnabled } = useSelector((state: any) => state.cart);
   const [showUsersModal, setShowUsersModal] = useState(false);
   const [mode, setMode] = useState<"bootstrap" | "register">("register");
   const [form, setForm] = useState({
@@ -62,6 +64,19 @@ const SettingsScreen: React.FC = () => {
         <Text style={styles.role}>
           {user?.role === "admin" ? "Administrador" : "Cajero"}
         </Text>
+      </View>
+
+      <View style={styles.optionCard}>
+        <View>
+          <Text style={styles.optionTitle}>Aplicar impuestos (16%)</Text>
+          <Text style={styles.optionSubtitle}>Activa o desactiva IVA en el total del POS.</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.toggleBtn, taxEnabled ? styles.toggleOn : styles.toggleOff]}
+          onPress={() => dispatch(setTaxEnabled(!taxEnabled))}
+        >
+          <Text style={styles.toggleText}>{taxEnabled ? "Activado" : "Desactivado"}</Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity 
@@ -222,6 +237,45 @@ const styles = StyleSheet.create({
   usersButtonText: {
     color: "#d4a574",
     fontWeight: "bold",
+  },
+  optionCard: {
+    backgroundColor: "#2c1810",
+    marginHorizontal: 15,
+    marginTop: 4,
+    marginBottom: 8,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#4a3428",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  optionTitle: {
+    color: "#f5f1e8",
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  optionSubtitle: {
+    color: "#8b6f4e",
+    fontSize: 12,
+  },
+  toggleBtn: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  toggleOn: {
+    backgroundColor: "#2e7d32",
+  },
+  toggleOff: {
+    backgroundColor: "#6d4c41",
+  },
+  toggleText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 12,
   },
   info: {
     alignItems: "center",
