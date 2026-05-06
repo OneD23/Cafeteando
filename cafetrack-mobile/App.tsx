@@ -3,6 +3,7 @@ import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { store } from './src/store';
 import { fetchIngredients } from './src/store/inventorySlice';
 import { fetchProducts } from './src/store/recipesSlice';
@@ -102,9 +103,11 @@ function AppContent() {
 export default function App() {
   return (
     <Provider store={store}>
-      <NavigationContainer>
-        <AppContent />
-      </NavigationContainer>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <AppContent />
+        </NavigationContainer>
+      </SafeAreaProvider>
     </Provider>
   );
 }

@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { api } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { queueUnsynced } from '../services/localDb';
 
 const UsersScreen: React.FC = () => {
   const { user } = useSelector((state: any) => state.auth);
@@ -13,6 +14,8 @@ const UsersScreen: React.FC = () => {
   const [form, setForm] = useState({ username: '', email: '', name: '', password: '', role: 'cashier' as 'admin' | 'manager' | 'cashier' });
   const [clients, setClients] = useState<any[]>([]);
   const [clientForm, setClientForm] = useState({ id: '', name: '', phone: '', email: '' });
+  const [salesHistory, setSalesHistory] = useState<any[]>([]);
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
   const handleCreateUser = async () => {
     if (user?.role !== 'admin') return Alert.alert('Acceso denegado', 'Solo administradores pueden gestionar usuarios.');
@@ -21,6 +24,7 @@ const UsersScreen: React.FC = () => {
       setIsSaving(true);
       if (mode === 'bootstrap') await api.bootstrapAdmin({ username: form.username, email: form.email, name: form.name, password: form.password });
       else await api.registerUser(form);
+      await queueUnsynced('employee', { ...form, mode, unsynced: true });
       Alert.alert('Éxito', 'Usuario creado correctamente.');
       setForm({ username: '', email: '', name: '', password: '', role: 'cashier' });
     } catch (error: any) {
@@ -28,8 +32,12 @@ const UsersScreen: React.FC = () => {
     } finally { setIsSaving(false); }
   };
   const loadClients = async () => {
-    const raw = await AsyncStorage.getItem('cafetrack_clients');
+    const [raw, salesRaw] = await Promise.all([
+      AsyncStorage.getItem('cafetrack_clients'),
+      AsyncStorage.getItem('cafetrack_sales_history'),
+    ]);
     setClients(raw ? JSON.parse(raw) : []);
+    setSalesHistory(salesRaw ? JSON.parse(salesRaw) : []);
   };
   React.useEffect(() => { if (tab === 'clientes') loadClients(); }, [tab]);
   const saveClient = async () => {
@@ -37,6 +45,7 @@ const UsersScreen: React.FC = () => {
     const next = [{ ...clientForm, id: clientForm.id || `cli-${Date.now()}` }, ...clients.filter((c) => c.id !== clientForm.id)];
     setClients(next);
     await AsyncStorage.setItem('cafetrack_clients', JSON.stringify(next));
+    await queueUnsynced('client', { ...clientForm, unsynced: true });
     setClientForm({ id: '', name: '', phone: '', email: '' });
   };
 
@@ -56,7 +65,23 @@ const UsersScreen: React.FC = () => {
     <TextInput style={styles.input} placeholder='Teléfono' value={clientForm.phone} onChangeText={(phone)=>setClientForm((p)=>({...p,phone}))} placeholderTextColor='#8b6f4e'/>
     <TextInput style={styles.input} placeholder='Email' value={clientForm.email} onChangeText={(email)=>setClientForm((p)=>({...p,email}))} placeholderTextColor='#8b6f4e'/>
     <TouchableOpacity style={styles.primaryBtn} onPress={saveClient}><Text style={styles.primaryText}>Guardar Cliente</Text></TouchableOpacity>
-    {clients.map((c)=> <TouchableOpacity key={c.id} style={styles.input} onPress={()=>setClientForm(c)}><Text style={styles.modeText}>{c.name} · {c.phone || c.email || 'Sin contacto'}</Text></TouchableOpacity>)}
+    {clients.map((c) => {
+      const invoices = salesHistory.filter((s: any) => String(s.customerName || '').trim().toLowerCase() === String(c.name || '').trim().toLowerCase());
+      const total = invoices.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+      const open = expandedClient === c.id;
+      return (
+        <View key={`detail-${c.id}`} style={styles.input}>
+          <TouchableOpacity onPress={() => setExpandedClient(open ? null : c.id)}>
+            <Text style={styles.modeText}>{c.name} · Total comprado: ${total.toFixed(2)} · Facturas: {invoices.length}</Text>
+          </TouchableOpacity>
+          {open ? invoices.slice(0, 15).map((inv: any) => (
+            <Text key={`${inv.saleId}-${inv.date}`} style={{ color: '#8b6f4e', marginTop: 4 }}>
+              #{inv.saleId} · {new Date(inv.date).toLocaleDateString()} {new Date(inv.date).toLocaleTimeString()} · ${Number(inv.total || 0).toFixed(2)}
+            </Text>
+          )) : null}
+        </View>
+      );
+    })}
     </>}
   </ScrollView></SafeAreaView>;
 };
