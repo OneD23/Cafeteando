@@ -99,7 +99,8 @@ export const processSale = createAsyncThunk(
     await queueUnsynced('sale', {
       items: items.map((i) => ({ productId: i.id, quantity: i.quantity, price: i.price })),
       paymentMethod: payload.paymentMethod,
-      customerName: payload.customerName,
+      customer: payload.customerName ? { name: payload.customerName } : undefined,
+      discount: { type: 'none', value: 0 },
       total: state.cart.totals.total,
       unsynced: true,
       localSaleId: saleId,

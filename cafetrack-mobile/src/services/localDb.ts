@@ -27,7 +27,11 @@ export const syncPendingData = async () => {
   for (const row of queue) {
     if (row.synced) continue;
     try {
-      if (row.entity === 'sale') await api.createSale(row.payload);
+      if (row.entity === 'sale') {
+        const payload = { ...row.payload };
+        if (!payload.customer && payload.customerName) payload.customer = { name: payload.customerName };
+        await api.createSale(payload);
+      }
       row.synced = 1;
     } catch {
       break;

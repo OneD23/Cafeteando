@@ -109,8 +109,14 @@ router.post('/', protect, async (req, res) => {
     const tax = (subtotal - discountAmount) * 0.16;
     const total = subtotal - discountAmount + tax;
 
+    const now = new Date();
+    const prefix = `SALE-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const saleCount = await Sale.countDocuments({ saleId: new RegExp(`^${prefix}`) }).session(session);
+    const generatedSaleId = `${prefix}-${String(saleCount + 1).padStart(4, '0')}`;
+
     // Crear venta
     const sale = await Sale.create([{
+      saleId: generatedSaleId,
       items: saleItems,
       subtotal,
       discount: {
