@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Modal, TextInput, Alert, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Modal, TextInput, Alert, ScrollView, Linking } from "react-native";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logout } from "../store/authSlice";
@@ -7,6 +7,7 @@ import { setTaxEnabled } from "../store/cartSlice";
 import { api } from "../api/client";
 
 const CLIENTS_STORAGE_KEY = "cafetrack_clients";
+const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
 const SettingsScreen: React.FC = () => {
   const dispatch = useDispatch();
@@ -20,10 +21,16 @@ const SettingsScreen: React.FC = () => {
 
   const [clients, setClients] = useState<any[]>([]);
   const [clientForm, setClientForm] = useState({ id: "", name: "", phone: "", email: "", notes: "" });
+  const [salesHistory, setSalesHistory] = useState<any[]>([]);
+  const [promoText, setPromoText] = useState("Hola {cliente}, tenemos una promoción especial para ti en CafeTrack.");
 
   const loadClients = async () => {
-    const raw = await AsyncStorage.getItem(CLIENTS_STORAGE_KEY);
-    setClients(raw ? JSON.parse(raw) : []);
+    const [clientsRaw, salesRaw] = await Promise.all([
+      AsyncStorage.getItem(CLIENTS_STORAGE_KEY),
+      AsyncStorage.getItem(SALES_STORAGE_KEY),
+    ]);
+    setClients(clientsRaw ? JSON.parse(clientsRaw) : []);
+    setSalesHistory(salesRaw ? JSON.parse(salesRaw) : []);
   };
 
   const persistClients = async (next: any[]) => {
@@ -73,6 +80,27 @@ const SettingsScreen: React.FC = () => {
         },
       },
     ]);
+  };
+
+
+  const getClientPurchases = (clientName: string) => {
+    const rows = salesHistory.filter((s: any) => String(s.customerName || "").trim().toLowerCase() === clientName.trim().toLowerCase());
+    const total = rows.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
+    return { count: rows.length, total };
+  };
+
+  const sendPromoWhatsApp = async (client: any) => {
+    if (!client.phone) return Alert.alert("Falta teléfono", "Este cliente no tiene número de WhatsApp.");
+    const msg = encodeURIComponent(promoText.replace('{cliente}', client.name));
+    const phone = String(client.phone).replace(/[^0-9]/g, '');
+    await Linking.openURL(`https://wa.me/${phone}?text=${msg}`);
+  };
+
+  const sendPromoEmail = async (client: any) => {
+    if (!client.email) return Alert.alert("Falta email", "Este cliente no tiene correo electrónico.");
+    const subject = encodeURIComponent('Promoción CafeTrack');
+    const body = encodeURIComponent(promoText.replace('{cliente}', client.name));
+    await Linking.openURL(`mailto:${client.email}?subject=${subject}&body=${body}`);
   };
 
   const handleCreateUser = async () => {
@@ -132,10 +160,14 @@ const SettingsScreen: React.FC = () => {
             <TouchableOpacity style={styles.primaryBtn} onPress={saveClient}><Text style={styles.primaryBtnText}>{clientForm.id ? "Actualizar" : "Guardar"}</Text></TouchableOpacity>
           </View>
 
+          <TextInput style={styles.input} placeholder="Mensaje promo (usa {cliente})" value={promoText} onChangeText={setPromoText} placeholderTextColor="#8b6f4e" />
+
           <ScrollView style={{ maxHeight: 220, marginTop: 10 }}>
             {clients.length === 0 ? <Text style={styles.version}>Sin clientes registrados</Text> : clients.map((client) => (
               <View key={client.id} style={styles.clientItem}>
-                <View style={{ flex: 1 }}><Text style={styles.clientName}>{client.name}</Text><Text style={styles.version}>{client.phone || client.email || "Sin contacto"}</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.clientName}>{client.name}</Text><Text style={styles.version}>{client.phone || client.email || "Sin contacto"}</Text><Text style={styles.version}>Compras: {getClientPurchases(client.name).count} | Total: ${getClientPurchases(client.name).total.toFixed(2)}</Text></View>
+                <TouchableOpacity onPress={() => sendPromoWhatsApp(client)}><Text style={styles.editText}>WhatsApp</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => sendPromoEmail(client)}><Text style={styles.editText}>Email</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => editClient(client)}><Text style={styles.editText}>Editar</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => deleteClient(client.id)}><Text style={styles.deleteText}>Eliminar</Text></TouchableOpacity>
               </View>

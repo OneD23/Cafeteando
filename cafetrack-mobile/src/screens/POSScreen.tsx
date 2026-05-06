@@ -15,6 +15,9 @@ import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
 import { PaymentModal } from "../components/PaymentModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
 const POSScreen: React.FC = () => {
   const dispatch = useDispatch();
@@ -101,12 +104,28 @@ const POSScreen: React.FC = () => {
           customerName: paymentData.customer?.name,
         }) as any
       ).unwrap();
+      await persistSaleForClient({
+        saleId: result.saleId,
+        customerName: paymentData.customer?.name,
+        total: saleTotals.total,
+        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+        date: new Date().toISOString(),
+      });
       Alert.alert("Venta completada", "Se descontaron ingredientes del inventario.");
       setShowPaymentModal(false);
       printInvoice(result.saleId, saleItems, saleTotals);
     } catch (error: any) {
       Alert.alert("No se pudo completar", error?.message || "Error al procesar la venta");
     }
+  };
+
+
+  const persistSaleForClient = async (payload: { saleId: string; customerName?: string; total: number; items: any[]; date: string }) => {
+    if (!payload.customerName?.trim()) return;
+    const raw = await AsyncStorage.getItem(SALES_STORAGE_KEY);
+    const history = raw ? JSON.parse(raw) : [];
+    history.unshift(payload);
+    await AsyncStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(history.slice(0, 500)));
   };
 
   const printInvoice = (saleId: string, items: any[], saleTotals: any) => {
