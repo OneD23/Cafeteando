@@ -47,9 +47,16 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // En desarrollo permitimos cualquier localhost para evitar bloqueos de Expo/Web.
-    if (process.env.NODE_ENV !== 'production' && /localhost|127\.0\.0\.1/.test(origin)) {
-      return callback(null, true);
+    // En desarrollo permitimos SOLO hosts locales válidos para evitar bypass por substring.
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const parsed = new URL(origin);
+        if (['localhost', '127.0.0.1'].includes(parsed.hostname)) {
+          return callback(null, true);
+        }
+      } catch (e) {
+        // Si el origin no es URL válida, continúa flujo normal de denegación.
+      }
     }
 
     if (allowedOrigins.includes(origin)) {
