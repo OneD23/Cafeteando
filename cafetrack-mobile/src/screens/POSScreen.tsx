@@ -15,11 +15,14 @@ import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
 import { PaymentModal } from "../components/PaymentModal";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
 const POSScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { items: cartItems, totals, processingSale } = useSelector((state: any) => state.cart);
-  const { products, recipes } = useSelector((state: any) => state.recipes);
+  const { products, recipes, loading: loadingProducts, error: productsError } = useSelector((state: any) => state.recipes);
   const { ingredients } = useSelector((state: any) => state.inventory);
   
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -101,12 +104,28 @@ const POSScreen: React.FC = () => {
           customerName: paymentData.customer?.name,
         }) as any
       ).unwrap();
+      await persistSaleForClient({
+        saleId: result.saleId,
+        customerName: paymentData.customer?.name,
+        total: saleTotals.total,
+        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+        date: new Date().toISOString(),
+      });
       Alert.alert("Venta completada", "Se descontaron ingredientes del inventario.");
       setShowPaymentModal(false);
       printInvoice(result.saleId, saleItems, saleTotals);
     } catch (error: any) {
       Alert.alert("No se pudo completar", error?.message || "Error al procesar la venta");
     }
+  };
+
+
+  const persistSaleForClient = async (payload: { saleId: string; customerName?: string; total: number; items: any[]; date: string }) => {
+    if (!payload.customerName?.trim()) return;
+    const raw = await AsyncStorage.getItem(SALES_STORAGE_KEY);
+    const history = raw ? JSON.parse(raw) : [];
+    history.unshift(payload);
+    await AsyncStorage.setItem(SALES_STORAGE_KEY, JSON.stringify(history.slice(0, 500)));
   };
 
   const printInvoice = (saleId: string, items: any[], saleTotals: any) => {
@@ -126,18 +145,50 @@ const POSScreen: React.FC = () => {
 
       const html = `
         <html>
-          <head><title>Factura ${saleId}</title></head>
-          <body style="font-family: Arial; padding: 20px;">
-            <h2>CafeTrack - Factura</h2>
-            <p><strong>Folio:</strong> ${saleId}</p>
-            <p><strong>Fecha:</strong> ${new Date().toLocaleString()}</p>
-            <table border="1" cellspacing="0" cellpadding="8" width="100%">
-              <thead><tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Total</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <h3>Subtotal: $${saleTotals.subtotal.toFixed(2)}</h3>
-            <h3>Impuesto: $${saleTotals.tax.toFixed(2)}</h3>
-            <h2>Total: $${saleTotals.total.toFixed(2)}</h2>
+          <head>
+            <title>Factura ${saleId}</title>
+            <style>
+              @page { size: 80mm auto; margin: 6mm; }
+              * { box-sizing: border-box; }
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                color: #111;
+                font-size: 12px;
+              }
+              .receipt {
+                width: 72mm;
+                margin: 0 auto;
+              }
+              h2 { margin: 0 0 8px 0; font-size: 18px; text-align: center; }
+              p { margin: 3px 0; }
+              table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+              th, td { border-bottom: 1px dashed #999; padding: 4px 2px; text-align: left; font-size: 11px; }
+              th:nth-child(2), td:nth-child(2), th:nth-child(3), td:nth-child(3), th:nth-child(4), td:nth-child(4) { text-align: right; }
+              .totals { margin-top: 10px; }
+              .total-row { display: flex; justify-content: space-between; margin: 3px 0; }
+              .grand { font-size: 16px; font-weight: 700; border-top: 1px solid #000; padding-top: 6px; margin-top: 6px; }
+              @media print {
+                html, body { width: 80mm; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="receipt">
+              <h2>CafeTrack</h2>
+              <p><strong>Factura:</strong> ${saleId}</p>
+              <p><strong>Fecha:</strong> ${new Date().toLocaleString()}</p>
+              <table>
+                <thead><tr><th>Producto</th><th>Cant.</th><th>P.Unit</th><th>Total</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+              <div class="totals">
+                <div class="total-row"><span>Subtotal</span><span>$${saleTotals.subtotal.toFixed(2)}</span></div>
+                <div class="total-row"><span>Impuesto</span><span>$${saleTotals.tax.toFixed(2)}</span></div>
+                <div class="total-row grand"><span>Total</span><span>$${saleTotals.total.toFixed(2)}</span></div>
+              </div>
+            </div>
           </body>
         </html>
       `;
@@ -204,7 +255,7 @@ const POSScreen: React.FC = () => {
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No hay productos para mostrar</Text>
             <Text style={styles.emptyStateSubtitle}>
-              Verifica búsqueda, categorías o inventario disponible.
+              {loadingProducts ? 'Cargando productos...' : productsError ? productsError : 'Verifica búsqueda, categorías o inventario disponible.'}
             </Text>
           </View>
         }
