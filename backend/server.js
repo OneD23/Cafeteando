@@ -18,6 +18,7 @@ const authRoutes = require('./src/routes/auth');
 const ingredientRoutes = require('./src/routes/ingredients');
 const productRoutes = require('./src/routes/products');
 const saleRoutes = require('./src/routes/sales');
+const clientRoutes = require('./src/routes/clients');
 
 // Conectar a MongoDB
 connectDB();
@@ -47,9 +48,16 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // En desarrollo permitimos cualquier localhost para evitar bloqueos de Expo/Web.
-    if (process.env.NODE_ENV !== 'production' && /localhost|127\.0\.0\.1/.test(origin)) {
-      return callback(null, true);
+    // En desarrollo permitimos SOLO hosts locales válidos para evitar bypass por substring.
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        const parsed = new URL(origin);
+        if (['localhost', '127.0.0.1'].includes(parsed.hostname)) {
+          return callback(null, true);
+        }
+      } catch (e) {
+        // Si el origin no es URL válida, continúa flujo normal de denegación.
+      }
     }
 
     if (allowedOrigins.includes(origin)) {
@@ -102,6 +110,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/ingredients', ingredientRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/sales', saleRoutes);
+app.use('/api/clients', clientRoutes);
 
 // Socket.io events
 socketEvents(io);

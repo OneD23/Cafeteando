@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,35 @@ export const ReportsScreen: React.FC = () => {
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
 
+
+  const getStartDate = (selected: 'day' | 'week' | 'month') => {
+    const now = new Date();
+    if (selected === 'day') {
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    }
+    if (selected === 'week') {
+      const weekday = now.getDay();
+      const diff = weekday === 0 ? 6 : weekday - 1;
+      const start = new Date(now);
+      start.setDate(now.getDate() - diff);
+      start.setHours(0, 0, 0, 0);
+      return start;
+    }
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  };
+
+  const periodStart = useMemo(() => getStartDate(period), [period]);
+
+  const filteredMovements = useMemo(
+    () => movements.filter((mov: any) => new Date(mov.date) >= periodStart),
+    [movements, periodStart]
+  );
+
+  const filteredEntries = useMemo(
+    () => entries.filter((entry: any) => new Date(entry.date) >= periodStart),
+    [entries, periodStart]
+  );
+
   // Calcular métricas
   const totalInventoryValue = ingredients.reduce((sum: number, ing: any) => 
     sum + (ing.stock * ing.costPerUnit), 0
@@ -28,11 +57,11 @@ export const ReportsScreen: React.FC = () => {
     ing.stock <= ing.minStock
   ).length;
 
-  const totalMovements = movements.length;
-  const totalEntries = entries
+  const totalMovements = filteredMovements.length;
+  const totalEntries = filteredEntries
     .filter((e: any) => e.direction === 'in')
     .reduce((sum: number, e: any) => sum + e.amount, 0);
-  const totalExits = entries
+  const totalExits = filteredEntries
     .filter((e: any) => e.direction === 'out')
     .reduce((sum: number, e: any) => sum + e.amount, 0);
   const netResult = totalEntries - totalExits;
@@ -63,6 +92,12 @@ export const ReportsScreen: React.FC = () => {
       color: lowStockCount > 0 ? '#c0392b' : '#27ae60'
     },
     { 
+      label: 'Movimientos', 
+      value: totalMovements.toString(),
+      icon: 'swap-vertical-outline',
+      color: '#9b59b6'
+    },
+    { 
       label: 'Entradas', 
       value: `$${totalEntries.toFixed(2)}`,
       icon: 'arrow-down-circle-outline',
@@ -82,8 +117,8 @@ export const ReportsScreen: React.FC = () => {
     },
   ];
 
-  const recentMovements = movements.slice(-10).reverse();
-  const recentJournal = entries.slice(0, 10);
+  const recentMovements = filteredMovements.slice(-10).reverse();
+  const recentJournal = [...filteredEntries].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
 
   return (
     <SafeAreaView style={styles.container}>

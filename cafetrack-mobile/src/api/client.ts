@@ -147,6 +147,17 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
     });
   }
 
+
+  async sendPromotion(payload: {
+    client: { name: string; phone?: string; email?: string };
+    message: string;
+  }) {
+    return this.request('/clients/promotions/send', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
   // Sales
   async createSale(saleData: any) {
     return this.request('/sales', {
