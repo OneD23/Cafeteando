@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../api/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -22,6 +23,7 @@ export const ReportsScreen: React.FC = () => {
   const [openingAmount, setOpeningAmount] = useState('0');
   const [openedAt, setOpenedAt] = useState<string | null>(null);
   const [dgiiResult, setDgiiResult] = useState<any>(null);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
@@ -127,6 +129,15 @@ export const ReportsScreen: React.FC = () => {
   const recentMovements = filteredMovements.slice(-10).reverse();
   const recentJournal = [...filteredEntries].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
   const latestSaleEntry = filteredEntries.find((e: any) => e.category === 'sale');
+
+  React.useEffect(() => {
+    const loadInvoices = async () => {
+      const raw = await AsyncStorage.getItem('cafetrack_sales_history');
+      const rows = raw ? JSON.parse(raw) : [];
+      setInvoices(rows);
+    };
+    if (accountingTab === 'factura') loadInvoices();
+  }, [accountingTab, entries.length]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -289,6 +300,17 @@ export const ReportsScreen: React.FC = () => {
             <Text style={styles.actionBtnText}>Generar e-CF DGII (sandbox)</Text>
           </TouchableOpacity>
           {dgiiResult?.secuencia ? <Text style={styles.movementDetail}>NCF: {dgiiResult.secuencia} · Estado: {dgiiResult.estado}</Text> : null}
+          <Text style={[styles.sectionTitle, { fontSize: 16, paddingHorizontal: 0, marginTop: 14 }]}>Facturas emitidas</Text>
+          {invoices.length === 0 ? <Text style={styles.emptyText}>No hay facturas registradas todavía.</Text> : invoices.slice(0, 20).map((inv: any) => (
+            <View key={`${inv.saleId}-${inv.date}`} style={styles.invoiceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.movementTitle}>Factura #{inv.saleId || 'N/A'}</Text>
+                <Text style={styles.movementDetail}>Cliente: {inv.customerName || 'Consumidor Final'}</Text>
+                <Text style={styles.movementDate}>Fecha: {new Date(inv.date).toLocaleDateString()} · Hora: {new Date(inv.date).toLocaleTimeString()}</Text>
+              </View>
+              <Text style={[styles.movementQty, { color: '#27ae60' }]}>${Number(inv.total || 0).toFixed(2)}</Text>
+            </View>
+          ))}
         </View>
       )}
       </ScrollView>
@@ -451,6 +473,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginTop: 8,
+  },
+  invoiceRow: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#3a2a20',
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   emptyText: {
     color: '#8b6f4e',

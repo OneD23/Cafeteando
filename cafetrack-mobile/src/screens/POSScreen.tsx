@@ -11,6 +11,7 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
@@ -30,6 +31,7 @@ const POSScreen: React.FC = () => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [cartCollapsed, setCartCollapsed] = useState(false);
   const hasInventoryData = ingredients.length > 0;
+  const insets = useSafeAreaInsets();
   const categories = useMemo<string[]>(() => {
     const allCategories = Array.from(
       new Set<string>(products.map((p: any) => String(p.category || "")).filter(Boolean))
@@ -276,7 +278,7 @@ const POSScreen: React.FC = () => {
       />
 
       {cartItems.length > 0 && (
-        <View style={styles.cartSheet}>
+        <View style={[styles.cartSheet, { paddingBottom: Math.max(insets.bottom, 12) + 18 }]}>
           <View style={styles.cartTitleRow}>
             <TouchableOpacity style={styles.cartTitleBtn} onPress={() => setCartCollapsed((prev) => !prev)}>
               <Text style={styles.cartTitle}>🛒 Carrito ({cartItems.length})</Text>
