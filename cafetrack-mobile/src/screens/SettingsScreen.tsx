@@ -91,16 +91,16 @@ const SettingsScreen: React.FC = () => {
 
   const sendPromoWhatsApp = async (client: any) => {
     if (!client.phone) return Alert.alert("Falta teléfono", "Este cliente no tiene número de WhatsApp.");
-    const msg = encodeURIComponent(promoText.replace('{cliente}', client.name));
-    const phone = String(client.phone).replace(/[^0-9]/g, '');
-    await Linking.openURL(`https://wa.me/${phone}?text=${msg}`);
+    const response = await api.sendPromotion({ client, message: promoText });
+    if (!response?.data?.whatsappUrl) return Alert.alert('Error', 'No fue posible generar enlace de WhatsApp.');
+    await Linking.openURL(response.data.whatsappUrl);
   };
 
   const sendPromoEmail = async (client: any) => {
     if (!client.email) return Alert.alert("Falta email", "Este cliente no tiene correo electrónico.");
-    const subject = encodeURIComponent('Promoción CafeTrack');
-    const body = encodeURIComponent(promoText.replace('{cliente}', client.name));
-    await Linking.openURL(`mailto:${client.email}?subject=${subject}&body=${body}`);
+    const response = await api.sendPromotion({ client, message: promoText });
+    if (!response?.data?.emailUrl) return Alert.alert('Error', 'No fue posible generar enlace de correo.');
+    await Linking.openURL(response.data.emailUrl);
   };
 
   const handleCreateUser = async () => {
