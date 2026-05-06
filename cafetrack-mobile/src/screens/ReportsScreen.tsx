@@ -3,18 +3,27 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  ScrollView,
+    ScrollView,
   TouchableOpacity,
   Dimensions,
+  TextInput,
+  Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import api from '../api/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
 export const ReportsScreen: React.FC = () => {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [accountingTab, setAccountingTab] = useState<'reportes' | 'factura' | 'movimientos' | 'diario' | 'apertura'>('reportes');
+  const [openingAmount, setOpeningAmount] = useState('0');
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const [dgiiResult, setDgiiResult] = useState<any>(null);
+  const [invoices, setInvoices] = useState<any[]>([]);
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
@@ -119,10 +128,20 @@ export const ReportsScreen: React.FC = () => {
 
   const recentMovements = filteredMovements.slice(-10).reverse();
   const recentJournal = [...filteredEntries].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+  const latestSaleEntry = filteredEntries.find((e: any) => e.category === 'sale');
+
+  React.useEffect(() => {
+    const loadInvoices = async () => {
+      const raw = await AsyncStorage.getItem('cafetrack_sales_history');
+      const rows = raw ? JSON.parse(raw) : [];
+      setInvoices(rows);
+    };
+    if (accountingTab === 'factura') loadInvoices();
+  }, [accountingTab, entries.length]);
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>📊 Reportes y Análisis</Text>
+      <Text style={styles.title}>🏦 Contabilidad</Text>
 
       {/* Period Selector */}
       <View style={styles.periodSelector}>
@@ -138,8 +157,31 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subTabs}>
+        {(['reportes','factura','movimientos','diario','apertura'] as const).map((tab) => (
+          <TouchableOpacity key={tab} style={[styles.subTab, accountingTab === tab && styles.subTabActive]} onPress={() => setAccountingTab(tab)}>
+            <Text style={[styles.subTabText, accountingTab === tab && styles.subTabTextActive]}>{tab}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
-      {/* Stats Grid */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      {accountingTab === 'apertura' && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Apertura de Caja</Text>
+          <Text style={styles.movementDetail}>Registra la apertura para iniciar operaciones.</Text>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Estado:</Text><Text style={[styles.movementQty, { color: openedAt ? '#27ae60' : '#d4a574' }]}>{openedAt ? 'ABIERTA' : 'PENDIENTE'}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Monto inicial:</Text><Text style={styles.movementTitle}>${openingAmount}</Text></View>
+          <TextInput value={openingAmount} onChangeText={setOpeningAmount} keyboardType='decimal-pad' style={styles.input} placeholder='Monto apertura' placeholderTextColor='#8b6f4e' />
+          <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+            await api.openCashSession(Number(openingAmount || 0));
+            setOpenedAt(new Date().toISOString());
+            Alert.alert('Listo', 'Apertura registrada');
+          }}><Text style={styles.actionBtnText}>Registrar Apertura</Text></TouchableOpacity>
+        </View>
+      )}
+      {accountingTab === 'reportes' && (
+      <>
       <View style={styles.statsGrid}>
         {stats.map((stat, index) => (
           <View key={index} style={styles.statCard}>
@@ -164,10 +206,13 @@ export const ReportsScreen: React.FC = () => {
           </View>
         </View>
       )}
+      </>
+      )}
 
-      {/* Recent Movements */}
+      {(accountingTab === 'movimientos' || accountingTab === 'reportes') && (
+      <>
       <Text style={styles.sectionTitle}>📋 Movimientos Recientes</Text>
-      <ScrollView style={styles.movementsList}>
+      <View style={styles.sectionCard}>
         {recentMovements.length === 0 ? (
           <Text style={styles.emptyText}>No hay movimientos registrados</Text>
         ) : (
@@ -197,12 +242,16 @@ export const ReportsScreen: React.FC = () => {
                 </Text>
               </View>
             );
-          })
+          }).slice(0,6)
         )}
-      </ScrollView>
+      </View>
+      </>
+      )}
 
+      {(accountingTab === 'diario' || accountingTab === 'reportes') && (
+      <>
       <Text style={styles.sectionTitle}>📒 Diario Contable</Text>
-      <ScrollView style={styles.movementsList}>
+      <View style={styles.sectionCard}>
         {recentJournal.length === 0 ? (
           <Text style={styles.emptyText}>No hay asientos contables registrados</Text>
         ) : (
@@ -229,8 +278,41 @@ export const ReportsScreen: React.FC = () => {
                 {entry.direction === 'in' ? '+' : '-'}${entry.amount.toFixed(2)}
               </Text>
             </View>
-          ))
+          )).slice(0,6)
         )}
+      </View>
+      </>
+      )}
+      {accountingTab === 'factura' && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🧾 Facturación</Text>
+          <Text style={styles.movementDetail}>Resumen ejecutivo para emisión rápida de comprobantes.</Text>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ventas registradas:</Text><Text style={styles.movementTitle}>{filteredEntries.length}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ingresos:</Text><Text style={[styles.movementQty,{color:'#27ae60'}]}>${totalEntries.toFixed(2)}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Impuestos estimados:</Text><Text style={styles.movementTitle}>${(totalEntries*0.16).toFixed(2)}</Text></View>
+          <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+            if (!latestSaleEntry?.meta?.saleId) return Alert.alert('Sin venta', 'No hay venta con saleId para facturar.');
+            const generated = await api.generateDgiiEcf({ saleId: latestSaleEntry.meta.saleId, ncfType: 'B02' });
+            const sent = await api.sendDgiiEcf(generated.data);
+            setDgiiResult(sent.data);
+            Alert.alert('DGII', 'e-CF generado y enviado en modo integración inicial');
+          }}>
+            <Text style={styles.actionBtnText}>Generar e-CF DGII (sandbox)</Text>
+          </TouchableOpacity>
+          {dgiiResult?.secuencia ? <Text style={styles.movementDetail}>NCF: {dgiiResult.secuencia} · Estado: {dgiiResult.estado}</Text> : null}
+          <Text style={[styles.sectionTitle, { fontSize: 16, paddingHorizontal: 0, marginTop: 14 }]}>Facturas emitidas</Text>
+          {invoices.length === 0 ? <Text style={styles.emptyText}>No hay facturas registradas todavía.</Text> : invoices.slice(0, 20).map((inv: any) => (
+            <View key={`${inv.saleId}-${inv.date}`} style={styles.invoiceRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.movementTitle}>Factura #{inv.saleId || 'N/A'}</Text>
+                <Text style={styles.movementDetail}>Cliente: {inv.customerName || 'Consumidor Final'}</Text>
+                <Text style={styles.movementDate}>Fecha: {new Date(inv.date).toLocaleDateString()} · Hora: {new Date(inv.date).toLocaleTimeString()}</Text>
+              </View>
+              <Text style={[styles.movementQty, { color: '#27ae60' }]}>${Number(inv.total || 0).toFixed(2)}</Text>
+            </View>
+          ))}
+        </View>
+      )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -272,6 +354,46 @@ const styles = StyleSheet.create({
   },
   periodTextActive: {
     color: '#1a0f0a',
+  },
+  subTabs: {
+    paddingHorizontal: 12,
+    gap: 8,
+    paddingBottom: 8,
+  },
+  subTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    backgroundColor: '#2c1810',
+  },
+  subTabActive: {
+    backgroundColor: '#d4a574',
+    borderColor: '#d4a574',
+  },
+  subTabText: { color: '#f5f1e8', textTransform: 'capitalize', fontWeight: '600' },
+  subTabTextActive: { color: '#1a0f0a' },
+  input: {
+    backgroundColor: '#2c1810',
+    borderColor: '#4a3428',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#f5f1e8',
+    marginTop: 10,
+  },
+  actionBtn: {
+    marginTop: 10,
+    backgroundColor: '#d4a574',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  actionBtnText: { color: '#1a0f0a', fontWeight: '800' },
+  content: {
+    paddingBottom: 24,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -338,9 +460,28 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
   },
-  movementsList: {
-    flex: 1,
-    paddingHorizontal: 15,
+  sectionCard: {
+    marginHorizontal: 15,
+    backgroundColor: '#24160f',
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
+  },
+  aperturaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  invoiceRow: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#3a2a20',
+    paddingTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   emptyText: {
     color: '#8b6f4e',
