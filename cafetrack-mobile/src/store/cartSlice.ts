@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { consumeIngredients } from './inventorySlice';
 import { recordSale } from './accountingSlice';
+import { queueUnsynced } from '../services/localDb';
 
 export interface CartItem {
   id: string;
@@ -95,6 +96,15 @@ export const processSale = createAsyncThunk(
       revenue: state.cart.totals.total,
       cogs: totalCost,
     }));
+    await queueUnsynced('sale', {
+      items: items.map((i) => ({ productId: i.id, quantity: i.quantity, price: i.price })),
+      paymentMethod: payload.paymentMethod,
+      customer: payload.customerName ? { name: payload.customerName } : undefined,
+      discount: { type: 'none', value: 0 },
+      total: state.cart.totals.total,
+      unsynced: true,
+      localSaleId: saleId,
+    });
     
     return { success: true, timestamp: new Date().toISOString(), saleId };
   }

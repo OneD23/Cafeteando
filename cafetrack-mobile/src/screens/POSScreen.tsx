@@ -6,11 +6,13 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
+    StatusBar,
   Alert,
   Platform,
+  Modal,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
@@ -28,7 +30,20 @@ const POSScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [cartCollapsed, setCartCollapsed] = useState(false);
+  const [cashOpenModal, setCashOpenModal] = useState(false);
+  const [openingAmount, setOpeningAmount] = useState("0");
+  const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const hasInventoryData = ingredients.length > 0;
+  const insets = useSafeAreaInsets();
+  React.useEffect(() => {
+    (async () => {
+      const raw = await AsyncStorage.getItem('cash_session');
+      const cs = raw ? JSON.parse(raw) : { isOpen: false };
+      setCashSessionOpen(!!cs?.isOpen);
+      if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
+    })();
+  }, []);
   const categories = useMemo<string[]>(() => {
     const allCategories = Array.from(
       new Set<string>(products.map((p: any) => String(p.category || "")).filter(Boolean))
@@ -78,6 +93,12 @@ const POSScreen: React.FC = () => {
   };
 
   const handleCompleteSale = async () => {
+    const cashRaw = await AsyncStorage.getItem('cash_session');
+    const cashSession = cashRaw ? JSON.parse(cashRaw) : { isOpen: false };
+    if (!cashSession?.isOpen) {
+      Alert.alert("Caja cerrada", "Debes hacer apertura de caja en Contabilidad antes de vender.");
+      return;
+    }
     if (!cartItems.length) {
       Alert.alert("Carrito vacío", "Agrega al menos un producto para continuar.");
       return;
@@ -215,6 +236,9 @@ const POSScreen: React.FC = () => {
         <View style={styles.stats}>
           <Text style={styles.stat}>Items: {cartItems.length}</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
+          <TouchableOpacity onPress={() => setCashOpenModal(true)}>
+            <Text style={[styles.stat, { color: cashSessionOpen ? '#27ae60' : '#d96d61' }]}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -250,7 +274,7 @@ const POSScreen: React.FC = () => {
         data={filteredProducts}
         numColumns={2}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.productsGrid}
+        contentContainerStyle={[styles.productsGrid, { paddingBottom: cartItems.length > 0 ? (cartCollapsed ? 120 : 380) : 24 }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No hay productos para mostrar</Text>
@@ -275,14 +299,23 @@ const POSScreen: React.FC = () => {
       />
 
       {cartItems.length > 0 && (
-        <View style={styles.cartSheet}>
+        <View style={[styles.cartSheet, { paddingBottom: Math.max(insets.bottom, 12) + 18 }]}>
           <View style={styles.cartTitleRow}>
-            <Text style={styles.cartTitle}>🛒 Carrito ({cartItems.length})</Text>
+            <TouchableOpacity style={styles.cartTitleBtn} onPress={() => setCartCollapsed((prev) => !prev)}>
+              <Text style={styles.cartTitle}>🛒 Carrito ({cartItems.length})</Text>
+              <Ionicons name={cartCollapsed ? "chevron-up" : "chevron-down"} size={20} color="#d4a574" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => dispatch(clearCart())}>
               <Text style={styles.clearCart}>Vaciar</Text>
             </TouchableOpacity>
           </View>
-          {cartItems.map((item: any) => (
+          {!cartCollapsed && (
+            <FlatList
+              data={cartItems}
+              keyExtractor={(item) => item.id}
+              style={styles.cartList}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }: any) => (
             <View key={item.id} style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
                 <Text style={styles.cartItemName}>{item.name}</Text>
@@ -309,7 +342,9 @@ const POSScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+              )}
+            />
+          )}
           <View style={styles.cartTotal}>
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
@@ -326,6 +361,41 @@ const POSScreen: React.FC = () => {
         total={totals.total}
         loading={processingSale}
       />
+      <Modal visible={cashOpenModal} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.cartTitle}>Control de Caja</Text>
+            <TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
+            {!cashSessionOpen ? (
+              <TouchableOpacity style={styles.checkoutButton} onPress={async () => {
+                const data = { isOpen: true, openedAt: new Date().toISOString(), openingAmount: Number(openingAmount || 0) };
+                await AsyncStorage.setItem('cash_session', JSON.stringify(data));
+                setCashSessionOpen(true);
+                setCashOpenModal(false);
+              }}>
+                <Text style={styles.checkoutText}>Abrir Caja</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: '#c0392b' }]} onPress={async () => {
+                const rawSales = await AsyncStorage.getItem('cafetrack_sales_history');
+                const sales = rawSales ? JSON.parse(rawSales) : [];
+                const today = new Date().toDateString();
+                const salesToday = sales.filter((s: any) => new Date(s.date).toDateString() === today);
+                const total = salesToday.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
+                const report = { date: new Date().toISOString(), openingAmount: Number(openingAmount || 0), salesCount: salesToday.length, totalSales: total, net: total - Number(openingAmount || 0) };
+                await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
+                await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: false }));
+                setCashSessionOpen(false);
+                setCashOpenModal(false);
+                Alert.alert('Cierre de caja', `Ventas: ${salesToday.length} | Total: $${total.toFixed(2)}`);
+              }}>
+                <Text style={[styles.checkoutText, { color: '#fff' }]}>Cerrar Caja y Reporte</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setCashOpenModal(false)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -474,7 +544,11 @@ const styles = StyleSheet.create({
     color: "#f5f1e8",
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 15,
+  },
+  cartTitleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   cartTitleRow: {
     flexDirection: "row",
@@ -490,6 +564,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
     alignItems: "center",
+  },
+  cartList: {
+    maxHeight: 190,
+    marginBottom: 8,
   },
   cartItemLeft: {
     flex: 1,
@@ -560,6 +638,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', padding: 20 },
+  modalCard: { backgroundColor: '#1a0f0a', borderWidth: 1, borderColor: '#4a3428', borderRadius: 14, padding: 16 },
 });
 
 export default POSScreen;
