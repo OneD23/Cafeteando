@@ -48,6 +48,8 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
     { id: 'food', name: 'Comida', icon: '🥪' },
   ];
 
+  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
+
   const toggleIngredient = (ingredient: Ingredient) => {
     const ingId = entityId(ingredient);
     const exists = selectedIngredients.find(i => String(i.ingredientId) === ingId);
@@ -114,7 +116,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       recipe: {
         items: validItems,
         preparationTime: parseInt(prepTime) || 2,
-        image: recipeImage || undefined,
+        image: productImage || undefined,
       },
     }));
 

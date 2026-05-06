@@ -19,6 +19,7 @@ const ingredientRoutes = require('./src/routes/ingredients');
 const productRoutes = require('./src/routes/products');
 const saleRoutes = require('./src/routes/sales');
 const clientRoutes = require('./src/routes/clients');
+const fiscalRoutes = require('./src/routes/fiscal');
 
 // Conectar a MongoDB
 connectDB();
@@ -111,6 +112,7 @@ app.use('/api/ingredients', ingredientRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/sales', saleRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/fiscal', fiscalRoutes);
 
 // Socket.io events
 socketEvents(io);
