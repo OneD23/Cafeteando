@@ -10,6 +10,7 @@ import {
   TextInput,
   Modal,
   Image,
+  Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
