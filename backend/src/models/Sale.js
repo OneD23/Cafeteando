@@ -28,8 +28,7 @@ const saleItemSchema = new mongoose.Schema({
 const saleSchema = new mongoose.Schema({
   saleId: {
     type: String,
-    unique: true,
-    required: true
+    unique: true
   },
   items: [saleItemSchema],
   subtotal: {
