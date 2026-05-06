@@ -6,10 +6,13 @@ import {
     ScrollView,
   TouchableOpacity,
   Dimensions,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
+import api from '../api/client';
 
 const { width } = Dimensions.get('window');
 
@@ -18,6 +21,7 @@ export const ReportsScreen: React.FC = () => {
   const [accountingTab, setAccountingTab] = useState<'reportes' | 'factura' | 'movimientos' | 'diario' | 'apertura'>('reportes');
   const [openingAmount, setOpeningAmount] = useState('0');
   const [openedAt, setOpenedAt] = useState<string | null>(null);
+  const [dgiiResult, setDgiiResult] = useState<any>(null);
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
@@ -122,6 +126,7 @@ export const ReportsScreen: React.FC = () => {
 
   const recentMovements = filteredMovements.slice(-10).reverse();
   const recentJournal = [...filteredEntries].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
+  const latestSaleEntry = filteredEntries.find((e: any) => e.category === 'sale');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -156,7 +161,12 @@ export const ReportsScreen: React.FC = () => {
           <Text style={styles.movementDetail}>Registra la apertura para iniciar operaciones.</Text>
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Estado:</Text><Text style={[styles.movementQty, { color: openedAt ? '#27ae60' : '#d4a574' }]}>{openedAt ? 'ABIERTA' : 'PENDIENTE'}</Text></View>
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Monto inicial:</Text><Text style={styles.movementTitle}>${openingAmount}</Text></View>
-          <TouchableOpacity style={styles.periodBtnActive} onPress={() => setOpenedAt(new Date().toISOString())}><Text style={styles.periodTextActive}>Registrar Apertura</Text></TouchableOpacity>
+          <TextInput value={openingAmount} onChangeText={setOpeningAmount} keyboardType='decimal-pad' style={styles.input} placeholder='Monto apertura' placeholderTextColor='#8b6f4e' />
+          <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+            await api.openCashSession(Number(openingAmount || 0));
+            setOpenedAt(new Date().toISOString());
+            Alert.alert('Listo', 'Apertura registrada');
+          }}><Text style={styles.actionBtnText}>Registrar Apertura</Text></TouchableOpacity>
         </View>
       )}
       {accountingTab === 'reportes' && (
@@ -269,6 +279,16 @@ export const ReportsScreen: React.FC = () => {
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ventas registradas:</Text><Text style={styles.movementTitle}>{filteredEntries.length}</Text></View>
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ingresos:</Text><Text style={[styles.movementQty,{color:'#27ae60'}]}>${totalEntries.toFixed(2)}</Text></View>
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Impuestos estimados:</Text><Text style={styles.movementTitle}>${(totalEntries*0.16).toFixed(2)}</Text></View>
+          <TouchableOpacity style={styles.actionBtn} onPress={async () => {
+            if (!latestSaleEntry?.meta?.saleId) return Alert.alert('Sin venta', 'No hay venta con saleId para facturar.');
+            const generated = await api.generateDgiiEcf({ saleId: latestSaleEntry.meta.saleId, ncfType: 'B02' });
+            const sent = await api.sendDgiiEcf(generated.data);
+            setDgiiResult(sent.data);
+            Alert.alert('DGII', 'e-CF generado y enviado en modo integración inicial');
+          }}>
+            <Text style={styles.actionBtnText}>Generar e-CF DGII (sandbox)</Text>
+          </TouchableOpacity>
+          {dgiiResult?.secuencia ? <Text style={styles.movementDetail}>NCF: {dgiiResult.secuencia} · Estado: {dgiiResult.estado}</Text> : null}
         </View>
       )}
       </ScrollView>
@@ -332,6 +352,24 @@ const styles = StyleSheet.create({
   },
   subTabText: { color: '#f5f1e8', textTransform: 'capitalize', fontWeight: '600' },
   subTabTextActive: { color: '#1a0f0a' },
+  input: {
+    backgroundColor: '#2c1810',
+    borderColor: '#4a3428',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#f5f1e8',
+    marginTop: 10,
+  },
+  actionBtn: {
+    marginTop: 10,
+    backgroundColor: '#d4a574',
+    borderRadius: 10,
+    padding: 12,
+    alignItems: 'center',
+  },
+  actionBtnText: { color: '#1a0f0a', fontWeight: '800' },
   content: {
     paddingBottom: 24,
   },
