@@ -1,7 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
 
-
 // Para producción: 'https://tu-api-render.com/api'
 
 const mapIds = (payload: any): any => {
