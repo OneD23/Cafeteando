@@ -3,6 +3,7 @@ import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { store } from './src/store';
 import { fetchIngredients } from './src/store/inventorySlice';
 import { fetchProducts } from './src/store/recipesSlice';
@@ -12,6 +13,10 @@ import POSScreen from './src/screens/POSScreen';
 import InventoryScreen from './src/screens/InventoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import UsersScreen from './src/screens/UsersScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from './src/api/client';
+import { initLocalDb, syncPendingData } from './src/services/localDb';
 
 const Tab = createBottomTabNavigator();
 
@@ -26,8 +31,10 @@ function MainTabs() {
             iconName = focused ? 'cafe' : 'cafe-outline';
           } else if (route.name === 'Inventario') {
             iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Reportes') {
+          } else if (route.name === 'Contabilidad') {
             iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+          } else if (route.name === 'Usuarios') {
+            iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Ajustes') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
@@ -46,7 +53,8 @@ function MainTabs() {
     >
       <Tab.Screen name="POS" component={POSScreen} />
       <Tab.Screen name="Inventario" component={InventoryScreen} />
-      <Tab.Screen name="Reportes" component={ReportsScreen} />
+      <Tab.Screen name="Contabilidad" component={ReportsScreen} />
+      <Tab.Screen name="Usuarios" component={UsersScreen} />
       <Tab.Screen name="Ajustes" component={SettingsScreen} />
     </Tab.Navigator>
   );
@@ -63,6 +71,26 @@ function AppContent() {
   }, []);
 
   React.useEffect(() => {
+    initLocalDb();
+    const syncTimer = setInterval(() => {
+      syncPendingData();
+    }, 15000);
+    return () => clearInterval(syncTimer);
+  }, []);
+
+  React.useEffect(() => {
+    const restoreSession = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      try {
+        const me = await api.me();
+        if (me?.data) store.dispatch({ type: 'auth/setUser', payload: me.data } as any);
+      } catch {}
+    };
+    restoreSession();
+  }, []);
+
+  React.useEffect(() => {
     if (user) {
       store.dispatch(fetchIngredients() as any);
       store.dispatch(fetchProducts() as any);
@@ -75,9 +103,11 @@ function AppContent() {
 export default function App() {
   return (
     <Provider store={store}>
-      <NavigationContainer>
-        <AppContent />
-      </NavigationContainer>
+      <SafeAreaProvider>
+        <NavigationContainer>
+          <AppContent />
+        </NavigationContainer>
+      </SafeAreaProvider>
     </Provider>
   );
 }
