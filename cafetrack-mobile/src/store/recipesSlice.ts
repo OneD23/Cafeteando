@@ -1,9 +1,21 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { api } from '../api/client';
 import { Recipe, RecipeItem, Product } from '../types';
+
+
+export const fetchProducts = createAsyncThunk(
+  'recipes/fetchProducts',
+  async () => {
+    const response = await api.getProducts();
+    return response.data;
+  }
+);
 
 interface RecipesState {
   products: Product[];
   recipes: Recipe[];
+  loading: boolean;
+  error: string | null;
 }
 
 const initialState: RecipesState = {
@@ -98,6 +110,8 @@ const initialState: RecipesState = {
       preparationTime: 5,
     },
   ],
+  loading: false,
+  error: null,
 };
 
 const getEntityId = (entity: any) => String(entity?.id ?? entity?._id ?? '');
@@ -168,6 +182,39 @@ const recipesSlice = createSlice({
         product.isActive = !product.isActive;
       }
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(fetchProducts.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchProducts.fulfilled, (state, action) => {
+        state.loading = false;
+        const products = (action.payload || []).map((p: any) => ({
+          ...p,
+          id: String(p.id ?? p._id),
+          recipeId: typeof p.recipeId === 'object' ? String(p.recipeId.id ?? p.recipeId._id) : String(p.recipeId ?? ''),
+        }));
+
+        const recipes = (action.payload || [])
+          .map((p: any) => {
+            const recipe = p.recipeId;
+            if (!recipe || typeof recipe !== 'object') return null;
+            return {
+              ...recipe,
+              productId: String(p.id ?? p._id),
+            };
+          })
+          .filter(Boolean);
+
+        state.products = products;
+        state.recipes = recipes as Recipe[];
+      })
+      .addCase(fetchProducts.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'No se pudieron cargar productos';
+      });
   },
 });
 
