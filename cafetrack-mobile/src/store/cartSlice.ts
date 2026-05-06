@@ -23,6 +23,7 @@ interface CartState {
     total: number;
   };
   processingSale: boolean;
+  taxEnabled: boolean;
 }
 
 const initialState: CartState = {
@@ -34,15 +35,19 @@ const initialState: CartState = {
     total: 0,
   },
   processingSale: false,
+  taxEnabled: true,
 };
 
-const calculateTotals = (items: CartItem[]) => {
+const calculateTotals = (items: CartItem[], discount = 0, taxEnabled = true) => {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const sanitizedDiscount = Math.min(Math.max(discount, 0), subtotal);
+  const taxableBase = Math.max(subtotal - sanitizedDiscount, 0);
+  const tax = taxEnabled ? taxableBase * 0.16 : 0;
   return {
     subtotal,
-    discount: 0,
-    tax: subtotal * 0.16,
-    total: subtotal * 1.16,
+    discount: sanitizedDiscount,
+    tax,
+    total: taxableBase + tax,
   };
 };
 
@@ -108,31 +113,37 @@ const cartSlice = createSlice({
       } else {
         state.items.push({ ...action.payload, quantity: 1 });
       }
-      state.totals = calculateTotals(state.items);
+      state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
     removeFromCart: (state, action: PayloadAction<string>) => {
       state.items = state.items.filter((item: any) => item.id !== action.payload);
-      state.totals = calculateTotals(state.items);
+      state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
     updateQuantity: (state, action: PayloadAction<{ id: string; qty: number }>) => {
       const item = state.items.find((item: any) => item.id === action.payload.id);
       if (item) {
         item.quantity = Math.max(1, Math.min(action.payload.qty, item.stock));
       }
-      state.totals = calculateTotals(state.items);
+      state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
     clearCart: (state) => {
       state.items = [];
       state.totals = { subtotal: 0, discount: 0, tax: 0, total: 0 };
     },
+
+    setTaxEnabled: (state, action: PayloadAction<boolean>) => {
+      state.taxEnabled = action.payload;
+      state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
+    },
     setDiscount: (state, action: PayloadAction<{ type: 'percentage' | 'fixed'; value: number }>) => {
       const { type, value } = action.payload;
+      let discount = 0;
       if (type === 'percentage') {
-        state.totals.discount = state.totals.subtotal * (value / 100);
+        discount = state.totals.subtotal * (value / 100);
       } else {
-        state.totals.discount = Math.min(value, state.totals.subtotal);
+        discount = Math.min(value, state.totals.subtotal);
       }
-      state.totals.total = (state.totals.subtotal - state.totals.discount) * 1.16;
+      state.totals = calculateTotals(state.items, discount, state.taxEnabled);
     },
   },
   extraReducers: (builder) => {
@@ -151,5 +162,5 @@ const cartSlice = createSlice({
   },
 });
 
-export const { addToCart, removeFromCart, updateQuantity, clearCart, setDiscount } = cartSlice.actions;
+export const { addToCart, removeFromCart, updateQuantity, clearCart, setDiscount, setTaxEnabled } = cartSlice.actions;
 export default cartSlice.reducer;
