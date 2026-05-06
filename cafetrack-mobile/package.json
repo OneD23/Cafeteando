@@ -10,7 +10,7 @@
     "check:screens": "node scripts/validate-screen-integrity.js"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~55.0.11",
+    "@expo/metro-runtime": "~54.0.0",
     "@expo/vector-icons": "^15.0.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.0.0",
@@ -19,13 +19,13 @@
     "@reduxjs/toolkit": "^2.0.1",
     "axios": "^1.6.2",
     "date-fns": "^3.0.6",
-    "expo": "^55.0.23",
-    "expo-camera": "~55.0.18",
-    "expo-secure-store": "~55.0.13",
-    "expo-status-bar": "~55.0.6",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
-    "react-native": "0.83.6",
+    "expo": "~54.0.0",
+    "expo-camera": "~17.0.0",
+    "expo-secure-store": "~15.0.0",
+    "expo-status-bar": "~3.0.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.0",
     "react-native-gesture-handler": "~2.30.0",
     "react-native-reanimated": "4.2.1",
     "react-native-safe-area-context": "~5.6.2",
@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
-    "@types/react": "~19.1.1",
+    "@types/react": "~19.1.10",
     "typescript": "^5.3.0"
   },
   "private": true
