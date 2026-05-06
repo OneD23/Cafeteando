@@ -81,6 +81,12 @@ const POSScreen: React.FC = () => {
   };
 
   const handleCompleteSale = async () => {
+    const cashRaw = await AsyncStorage.getItem('cash_session');
+    const cashSession = cashRaw ? JSON.parse(cashRaw) : { isOpen: false };
+    if (!cashSession?.isOpen) {
+      Alert.alert("Caja cerrada", "Debes hacer apertura de caja en Contabilidad antes de vender.");
+      return;
+    }
     if (!cartItems.length) {
       Alert.alert("Carrito vacío", "Agrega al menos un producto para continuar.");
       return;

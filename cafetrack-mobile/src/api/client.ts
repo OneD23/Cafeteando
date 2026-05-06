@@ -71,6 +71,9 @@ class ApiClient {
       body: JSON.stringify(credentials),
     });
   }
+  async me() {
+    return this.request('/auth/me');
+  }
 
   async bootstrapAdmin(payload: {
     username: string;

@@ -13,6 +13,9 @@ import InventoryScreen from './src/screens/InventoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import UsersScreen from './src/screens/UsersScreen';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import api from './src/api/client';
+import { initLocalDb, syncPendingData } from './src/services/localDb';
 
 const Tab = createBottomTabNavigator();
 
@@ -64,6 +67,26 @@ function AppContent() {
       setUser(store.getState().auth.user);
     });
     return unsubscribe;
+  }, []);
+
+  React.useEffect(() => {
+    initLocalDb();
+    const syncTimer = setInterval(() => {
+      syncPendingData();
+    }, 15000);
+    return () => clearInterval(syncTimer);
+  }, []);
+
+  React.useEffect(() => {
+    const restoreSession = async () => {
+      const token = await AsyncStorage.getItem('token');
+      if (!token) return;
+      try {
+        const me = await api.me();
+        if (me?.data) store.dispatch({ type: 'auth/setUser', payload: me.data } as any);
+      } catch {}
+    };
+    restoreSession();
   }, []);
 
   React.useEffect(() => {
