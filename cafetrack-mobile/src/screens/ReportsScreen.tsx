@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  ScrollView,
+    ScrollView,
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -139,7 +139,7 @@ export const ReportsScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* Stats Grid */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       <View style={styles.statsGrid}>
         {stats.map((stat, index) => (
           <View key={index} style={styles.statCard}>
@@ -167,7 +167,7 @@ export const ReportsScreen: React.FC = () => {
 
       {/* Recent Movements */}
       <Text style={styles.sectionTitle}>📋 Movimientos Recientes</Text>
-      <ScrollView style={styles.movementsList}>
+      <View style={styles.sectionCard}>
         {recentMovements.length === 0 ? (
           <Text style={styles.emptyText}>No hay movimientos registrados</Text>
         ) : (
@@ -197,12 +197,12 @@ export const ReportsScreen: React.FC = () => {
                 </Text>
               </View>
             );
-          })
+          }).slice(0,6)
         )}
-      </ScrollView>
+      </View>
 
       <Text style={styles.sectionTitle}>📒 Diario Contable</Text>
-      <ScrollView style={styles.movementsList}>
+      <View style={styles.sectionCard}>
         {recentJournal.length === 0 ? (
           <Text style={styles.emptyText}>No hay asientos contables registrados</Text>
         ) : (
@@ -229,8 +229,9 @@ export const ReportsScreen: React.FC = () => {
                 {entry.direction === 'in' ? '+' : '-'}${entry.amount.toFixed(2)}
               </Text>
             </View>
-          ))
+          )).slice(0,6)
         )}
+      </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -272,6 +273,9 @@ const styles = StyleSheet.create({
   },
   periodTextActive: {
     color: '#1a0f0a',
+  },
+  content: {
+    paddingBottom: 24,
   },
   statsGrid: {
     flexDirection: 'row',
@@ -338,9 +342,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
     marginBottom: 10,
   },
-  movementsList: {
-    flex: 1,
-    paddingHorizontal: 15,
+  sectionCard: {
+    marginHorizontal: 15,
+    backgroundColor: '#24160f',
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    borderRadius: 14,
+    padding: 10,
+    marginBottom: 10,
   },
   emptyText: {
     color: '#8b6f4e',
