@@ -15,6 +15,9 @@ const { width } = Dimensions.get('window');
 
 export const ReportsScreen: React.FC = () => {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
+  const [accountingTab, setAccountingTab] = useState<'reportes' | 'factura' | 'movimientos' | 'diario' | 'apertura'>('reportes');
+  const [openingAmount, setOpeningAmount] = useState('0');
+  const [openedAt, setOpenedAt] = useState<string | null>(null);
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
@@ -122,7 +125,7 @@ export const ReportsScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>📊 Reportes y Análisis</Text>
+      <Text style={styles.title}>🏦 Contabilidad</Text>
 
       {/* Period Selector */}
       <View style={styles.periodSelector}>
@@ -138,8 +141,26 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subTabs}>
+        {(['reportes','factura','movimientos','diario','apertura'] as const).map((tab) => (
+          <TouchableOpacity key={tab} style={[styles.subTab, accountingTab === tab && styles.subTabActive]} onPress={() => setAccountingTab(tab)}>
+            <Text style={[styles.subTabText, accountingTab === tab && styles.subTabTextActive]}>{tab}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
+      {accountingTab === 'apertura' && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>Apertura de Caja</Text>
+          <Text style={styles.movementDetail}>Registra la apertura para iniciar operaciones.</Text>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Estado:</Text><Text style={[styles.movementQty, { color: openedAt ? '#27ae60' : '#d4a574' }]}>{openedAt ? 'ABIERTA' : 'PENDIENTE'}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Monto inicial:</Text><Text style={styles.movementTitle}>${openingAmount}</Text></View>
+          <TouchableOpacity style={styles.periodBtnActive} onPress={() => setOpenedAt(new Date().toISOString())}><Text style={styles.periodTextActive}>Registrar Apertura</Text></TouchableOpacity>
+        </View>
+      )}
+      {accountingTab === 'reportes' && (
+      <>
       <View style={styles.statsGrid}>
         {stats.map((stat, index) => (
           <View key={index} style={styles.statCard}>
@@ -164,8 +185,11 @@ export const ReportsScreen: React.FC = () => {
           </View>
         </View>
       )}
+      </>
+      )}
 
-      {/* Recent Movements */}
+      {(accountingTab === 'movimientos' || accountingTab === 'reportes') && (
+      <>
       <Text style={styles.sectionTitle}>📋 Movimientos Recientes</Text>
       <View style={styles.sectionCard}>
         {recentMovements.length === 0 ? (
@@ -200,7 +224,11 @@ export const ReportsScreen: React.FC = () => {
           }).slice(0,6)
         )}
       </View>
+      </>
+      )}
 
+      {(accountingTab === 'diario' || accountingTab === 'reportes') && (
+      <>
       <Text style={styles.sectionTitle}>📒 Diario Contable</Text>
       <View style={styles.sectionCard}>
         {recentJournal.length === 0 ? (
@@ -232,6 +260,17 @@ export const ReportsScreen: React.FC = () => {
           )).slice(0,6)
         )}
       </View>
+      </>
+      )}
+      {accountingTab === 'factura' && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>🧾 Facturación</Text>
+          <Text style={styles.movementDetail}>Resumen ejecutivo para emisión rápida de comprobantes.</Text>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ventas registradas:</Text><Text style={styles.movementTitle}>{filteredEntries.length}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ingresos:</Text><Text style={[styles.movementQty,{color:'#27ae60'}]}>${totalEntries.toFixed(2)}</Text></View>
+          <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Impuestos estimados:</Text><Text style={styles.movementTitle}>${(totalEntries*0.16).toFixed(2)}</Text></View>
+        </View>
+      )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -274,6 +313,25 @@ const styles = StyleSheet.create({
   periodTextActive: {
     color: '#1a0f0a',
   },
+  subTabs: {
+    paddingHorizontal: 12,
+    gap: 8,
+    paddingBottom: 8,
+  },
+  subTab: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    backgroundColor: '#2c1810',
+  },
+  subTabActive: {
+    backgroundColor: '#d4a574',
+    borderColor: '#d4a574',
+  },
+  subTabText: { color: '#f5f1e8', textTransform: 'capitalize', fontWeight: '600' },
+  subTabTextActive: { color: '#1a0f0a' },
   content: {
     paddingBottom: 24,
   },
@@ -350,6 +408,11 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 10,
     marginBottom: 10,
+  },
+  aperturaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
   },
   emptyText: {
     color: '#8b6f4e',
