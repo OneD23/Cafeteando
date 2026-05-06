@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, Modal, TextInput, Alert, ScrollView, Linking } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ScrollView, Linking } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logout } from "../store/authSlice";
