@@ -99,7 +99,7 @@ const LoginScreen: React.FC = () => {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Text style={styles.logoEmoji}>☕</Text>
-          <Text style={styles.logoTitle}>CafeTrack</Text>
+          <Text style={styles.logoTitle}>Cafeteando</Text>
           <Text style={styles.logoSubtitle}>MOBILE POS</Text>
         </View>
 
