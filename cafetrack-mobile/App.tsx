@@ -12,6 +12,7 @@ import POSScreen from './src/screens/POSScreen';
 import InventoryScreen from './src/screens/InventoryScreen';
 import ReportsScreen from './src/screens/ReportsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import UsersScreen from './src/screens/UsersScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -26,8 +27,10 @@ function MainTabs() {
             iconName = focused ? 'cafe' : 'cafe-outline';
           } else if (route.name === 'Inventario') {
             iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Reportes') {
+          } else if (route.name === 'Contabilidad') {
             iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+          } else if (route.name === 'Usuarios') {
+            iconName = focused ? 'people' : 'people-outline';
           } else if (route.name === 'Ajustes') {
             iconName = focused ? 'settings' : 'settings-outline';
           }
@@ -46,7 +49,8 @@ function MainTabs() {
     >
       <Tab.Screen name="POS" component={POSScreen} />
       <Tab.Screen name="Inventario" component={InventoryScreen} />
-      <Tab.Screen name="Reportes" component={ReportsScreen} />
+      <Tab.Screen name="Contabilidad" component={ReportsScreen} />
+      <Tab.Screen name="Usuarios" component={UsersScreen} />
       <Tab.Screen name="Ajustes" component={SettingsScreen} />
     </Tab.Navigator>
   );

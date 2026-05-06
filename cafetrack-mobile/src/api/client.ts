@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config/api';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api';
 // Para producción: 'https://tu-api-render.com/api'
 
 const mapIds = (payload: any): any => {
@@ -173,6 +173,31 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
 
   async getDashboardStats() {
     return this.request('/sales/dashboard/stats');
+  }
+
+  async getCashSession() {
+    return this.request('/fiscal/cash-session');
+  }
+
+  async openCashSession(openingAmount: number) {
+    return this.request('/fiscal/cash-session/open', {
+      method: 'POST',
+      body: JSON.stringify({ openingAmount }),
+    });
+  }
+
+  async generateDgiiEcf(payload: { saleId: string; rnc?: string; razonSocial?: string; ncfType?: string }) {
+    return this.request('/fiscal/dgii/ecf/generate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async sendDgiiEcf(ecf: any) {
+    return this.request('/fiscal/dgii/ecf/send', {
+      method: 'POST',
+      body: JSON.stringify({ ecf }),
+    });
   }
 }
 
