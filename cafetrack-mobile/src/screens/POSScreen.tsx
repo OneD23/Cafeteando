@@ -28,6 +28,7 @@ const POSScreen: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [cartCollapsed, setCartCollapsed] = useState(false);
   const hasInventoryData = ingredients.length > 0;
   const categories = useMemo<string[]>(() => {
     const allCategories = Array.from(
@@ -250,7 +251,7 @@ const POSScreen: React.FC = () => {
         data={filteredProducts}
         numColumns={2}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.productsGrid}
+        contentContainerStyle={[styles.productsGrid, { paddingBottom: cartItems.length > 0 ? (cartCollapsed ? 120 : 380) : 24 }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Text style={styles.emptyStateTitle}>No hay productos para mostrar</Text>
@@ -277,12 +278,21 @@ const POSScreen: React.FC = () => {
       {cartItems.length > 0 && (
         <View style={styles.cartSheet}>
           <View style={styles.cartTitleRow}>
-            <Text style={styles.cartTitle}>🛒 Carrito ({cartItems.length})</Text>
+            <TouchableOpacity style={styles.cartTitleBtn} onPress={() => setCartCollapsed((prev) => !prev)}>
+              <Text style={styles.cartTitle}>🛒 Carrito ({cartItems.length})</Text>
+              <Ionicons name={cartCollapsed ? "chevron-up" : "chevron-down"} size={20} color="#d4a574" />
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => dispatch(clearCart())}>
               <Text style={styles.clearCart}>Vaciar</Text>
             </TouchableOpacity>
           </View>
-          {cartItems.map((item: any) => (
+          {!cartCollapsed && (
+            <FlatList
+              data={cartItems}
+              keyExtractor={(item) => item.id}
+              style={styles.cartList}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }: any) => (
             <View key={item.id} style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
                 <Text style={styles.cartItemName}>{item.name}</Text>
@@ -309,7 +319,9 @@ const POSScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </View>
-          ))}
+              )}
+            />
+          )}
           <View style={styles.cartTotal}>
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
@@ -474,7 +486,11 @@ const styles = StyleSheet.create({
     color: "#f5f1e8",
     fontSize: 18,
     fontWeight: "bold",
-    marginBottom: 15,
+  },
+  cartTitleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
   },
   cartTitleRow: {
     flexDirection: "row",
@@ -490,6 +506,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 8,
     alignItems: "center",
+  },
+  cartList: {
+    maxHeight: 190,
+    marginBottom: 8,
   },
   cartItemLeft: {
     flex: 1,
