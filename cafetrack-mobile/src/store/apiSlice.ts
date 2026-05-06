@@ -1,5 +1,6 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_URL } from '../config/api';
 
 const getToken = async () => {
   return await AsyncStorage.getItem('token');
@@ -8,7 +9,7 @@ const getToken = async () => {
 export const apiSlice = createApi({
   reducerPath: 'api',
   baseQuery: fetchBaseQuery({
-    baseUrl: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:5000/api',
+    baseUrl: API_URL,
     prepareHeaders: async (headers: any) => {
       const token = await getToken();
       if (token) {

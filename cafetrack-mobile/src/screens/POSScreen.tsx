@@ -6,11 +6,11 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
+    StatusBar,
   Alert,
   Platform,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
