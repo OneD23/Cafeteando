@@ -1,108 +1,21 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert, ScrollView, Linking } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { logout } from "../store/authSlice";
 import { setTaxEnabled } from "../store/cartSlice";
 import { api } from "../api/client";
 
-const CLIENTS_STORAGE_KEY = "cafetrack_clients";
-const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
 const SettingsScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: any) => state.auth);
   const { taxEnabled } = useSelector((state: any) => state.cart);
   const [showUsersModal, setShowUsersModal] = useState(false);
-  const [showClientsModal, setShowClientsModal] = useState(false);
   const [mode, setMode] = useState<"bootstrap" | "register">("register");
   const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "cashier" as "admin" | "manager" | "cashier" });
   const [isSaving, setIsSaving] = useState(false);
 
-  const [clients, setClients] = useState<any[]>([]);
-  const [clientForm, setClientForm] = useState({ id: "", name: "", phone: "", email: "", notes: "" });
-  const [salesHistory, setSalesHistory] = useState<any[]>([]);
-  const [promoText, setPromoText] = useState("Hola {cliente}, tenemos una promoción especial para ti en CafeTrack.");
-
-  const loadClients = async () => {
-    const [clientsRaw, salesRaw] = await Promise.all([
-      AsyncStorage.getItem(CLIENTS_STORAGE_KEY),
-      AsyncStorage.getItem(SALES_STORAGE_KEY),
-    ]);
-    setClients(clientsRaw ? JSON.parse(clientsRaw) : []);
-    setSalesHistory(salesRaw ? JSON.parse(salesRaw) : []);
-  };
-
-  const persistClients = async (next: any[]) => {
-    setClients(next);
-    await AsyncStorage.setItem(CLIENTS_STORAGE_KEY, JSON.stringify(next));
-  };
-
-  useEffect(() => {
-    if (showClientsModal) loadClients();
-  }, [showClientsModal]);
-
-  const saveClient = async () => {
-    if (!clientForm.name.trim()) {
-      Alert.alert("Dato requerido", "El nombre del cliente es obligatorio.");
-      return;
-    }
-
-    const payload = {
-      id: clientForm.id || `cli-${Date.now()}`,
-      name: clientForm.name.trim(),
-      phone: clientForm.phone.trim(),
-      email: clientForm.email.trim(),
-      notes: clientForm.notes.trim(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    const next = clientForm.id
-      ? clients.map((c) => (c.id === clientForm.id ? payload : c))
-      : [payload, ...clients];
-
-    await persistClients(next);
-    setClientForm({ id: "", name: "", phone: "", email: "", notes: "" });
-    Alert.alert("Éxito", clientForm.id ? "Cliente actualizado" : "Cliente creado");
-  };
-
-  const editClient = (client: any) => setClientForm(client);
-
-  const deleteClient = (id: string) => {
-    Alert.alert("Eliminar cliente", "¿Deseas eliminar este cliente?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          await persistClients(clients.filter((c) => c.id !== id));
-          if (clientForm.id === id) setClientForm({ id: "", name: "", phone: "", email: "", notes: "" });
-        },
-      },
-    ]);
-  };
-
-
-  const getClientPurchases = (clientName: string) => {
-    const rows = salesHistory.filter((s: any) => String(s.customerName || "").trim().toLowerCase() === clientName.trim().toLowerCase());
-    const total = rows.reduce((sum: number, r: any) => sum + Number(r.total || 0), 0);
-    return { count: rows.length, total };
-  };
-
-  const sendPromoWhatsApp = async (client: any) => {
-    if (!client.phone) return Alert.alert("Falta teléfono", "Este cliente no tiene número de WhatsApp.");
-    const response = await api.sendPromotion({ client, message: promoText });
-    if (!response?.data?.whatsappUrl) return Alert.alert('Error', 'No fue posible generar enlace de WhatsApp.');
-    await Linking.openURL(response.data.whatsappUrl);
-  };
-
-  const sendPromoEmail = async (client: any) => {
-    if (!client.email) return Alert.alert("Falta email", "Este cliente no tiene correo electrónico.");
-    const response = await api.sendPromotion({ client, message: promoText });
-    if (!response?.data?.emailUrl) return Alert.alert('Error', 'No fue posible generar enlace de correo.');
-    await Linking.openURL(response.data.emailUrl);
-  };
 
   const handleCreateUser = async () => {
     if (!form.username || !form.email || !form.name || !form.password) {
@@ -137,10 +50,6 @@ const SettingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.usersButton} onPress={() => setShowClientsModal(true)}>
-        <Text style={styles.usersButtonText}>Gestión de Clientes</Text>
-      </TouchableOpacity>
-
       <TouchableOpacity style={styles.logoutButton} onPress={() => dispatch(logout())}><Text style={styles.logoutText}>Cerrar Sesión</Text></TouchableOpacity>
 
       <TouchableOpacity style={styles.usersButton} onPress={() => {
@@ -149,35 +58,6 @@ const SettingsScreen: React.FC = () => {
       }}>
         <Text style={styles.usersButtonText}>Gestión de Usuarios</Text>
       </TouchableOpacity>
-
-      <Modal visible={showClientsModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}><View style={styles.modalCard}><Text style={styles.modalTitle}>Gestión de clientes</Text>
-          <TextInput style={styles.input} placeholder="Nombre*" value={clientForm.name} onChangeText={(name) => setClientForm((p) => ({ ...p, name }))} placeholderTextColor="#8b6f4e" />
-          <TextInput style={styles.input} placeholder="Teléfono" value={clientForm.phone} onChangeText={(phone) => setClientForm((p) => ({ ...p, phone }))} placeholderTextColor="#8b6f4e" />
-          <TextInput style={styles.input} placeholder="Email" value={clientForm.email} onChangeText={(email) => setClientForm((p) => ({ ...p, email }))} placeholderTextColor="#8b6f4e" />
-          <TextInput style={styles.input} placeholder="Notas" value={clientForm.notes} onChangeText={(notes) => setClientForm((p) => ({ ...p, notes }))} placeholderTextColor="#8b6f4e" />
-          <View style={styles.modalActions}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => setClientForm({ id: "", name: "", phone: "", email: "", notes: "" })}><Text style={styles.secondaryBtnText}>Limpiar</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.primaryBtn} onPress={saveClient}><Text style={styles.primaryBtnText}>{clientForm.id ? "Actualizar" : "Guardar"}</Text></TouchableOpacity>
-          </View>
-
-          <TextInput style={styles.input} placeholder="Mensaje promo (usa {cliente})" value={promoText} onChangeText={setPromoText} placeholderTextColor="#8b6f4e" />
-
-          <ScrollView style={{ maxHeight: 220, marginTop: 10 }}>
-            {clients.length === 0 ? <Text style={styles.version}>Sin clientes registrados</Text> : clients.map((client) => (
-              <View key={client.id} style={styles.clientItem}>
-                <View style={{ flex: 1 }}><Text style={styles.clientName}>{client.name}</Text><Text style={styles.version}>{client.phone || client.email || "Sin contacto"}</Text><Text style={styles.version}>Compras: {getClientPurchases(client.name).count} | Total: ${getClientPurchases(client.name).total.toFixed(2)}</Text></View>
-                <TouchableOpacity onPress={() => sendPromoWhatsApp(client)}><Text style={styles.editText}>WhatsApp</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => sendPromoEmail(client)}><Text style={styles.editText}>Email</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => editClient(client)}><Text style={styles.editText}>Editar</Text></TouchableOpacity>
-                <TouchableOpacity onPress={() => deleteClient(client.id)}><Text style={styles.deleteText}>Eliminar</Text></TouchableOpacity>
-              </View>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity style={[styles.secondaryBtn, { marginTop: 12 }]} onPress={() => setShowClientsModal(false)}><Text style={styles.secondaryBtnText}>Cerrar</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
 
       <Modal visible={showUsersModal} transparent animationType="slide"><View style={styles.modalBackdrop}><View style={styles.modalCard}><Text style={styles.modalTitle}>Crear usuario</Text>
         <View style={styles.switchRow}>{(["register", "bootstrap"] as const).map((m) => <TouchableOpacity key={m} style={[styles.modeBtn, mode === m && styles.modeBtnActive]} onPress={() => setMode(m)}><Text style={styles.modeText}>{m === "register" ? "Registro normal" : "Bootstrap admin"}</Text></TouchableOpacity>)}</View>
