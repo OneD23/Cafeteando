@@ -89,6 +89,9 @@ const inventorySlice = createSlice({
         state.ingredients.push(action.payload);
       }
     },
+    setMovements: (state, action: PayloadAction<any[]>) => {
+      state.movements = action.payload || [];
+    },
     consumeIngredients: (state, action: PayloadAction<{
       recipeItems: Array<{ ingredientId: string; quantity: number }>;
       quantity: number;
@@ -188,5 +191,5 @@ const inventorySlice = createSlice({
   },
 });
 
-export const { setIngredients, updateIngredient, consumeIngredients } = inventorySlice.actions;
+export const { setIngredients, updateIngredient, setMovements, consumeIngredients } = inventorySlice.actions;
 export default inventorySlice.reducer;

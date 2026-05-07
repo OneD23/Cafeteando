@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
+import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { queueUnsynced } from '../services/localDb';
@@ -48,6 +49,12 @@ const UsersScreen: React.FC = () => {
   };
 
   React.useEffect(() => { if (tab === 'clientes') loadClients(); }, [tab]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (tab === 'clientes') loadClients();
+    }, [tab])
+  );
 
   const saveClient = async () => {
     if (!clientForm.name.trim()) return Alert.alert('Nombre requerido');
