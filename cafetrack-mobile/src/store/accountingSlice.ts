@@ -59,8 +59,11 @@ const accountingSlice = createSlice({
     clearJournal: (state) => {
       state.entries = [];
     },
+    hydrateJournal: (state, action: PayloadAction<JournalEntry[]>) => {
+      state.entries = action.payload || [];
+    },
   },
 });
 
-export const { addJournalEntry, recordSale, clearJournal } = accountingSlice.actions;
+export const { addJournalEntry, recordSale, clearJournal, hydrateJournal } = accountingSlice.actions;
 export default accountingSlice.reducer;
