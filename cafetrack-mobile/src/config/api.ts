@@ -9,14 +9,14 @@ const resolveDevApiUrl = (): string => {
   const host = hostUri.split(':')[0];
 
   if (host) {
-    return `http://${host}:5000/api`;
+    return `https://cafeteando-production.up.railway.app/api`;
   }
 
   if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:5000/api';
+    return 'https://cafeteando-production.up.railway.app/api';
   }
 
-  return 'http://localhost:5000/api';
+  return 'https://cafeteando-production.up.railway.app/api';
 };
 
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || resolveDevApiUrl();
+export const API_URL = 'https://cafeteando-production.up.railway.app/api';
