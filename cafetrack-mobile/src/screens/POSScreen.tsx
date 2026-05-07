@@ -18,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
 import { PaymentModal } from "../components/PaymentModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import api from "../api/client";
 
 const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
@@ -34,14 +35,18 @@ const POSScreen: React.FC = () => {
   const [cashOpenModal, setCashOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState("0");
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
+  const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
   React.useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem('cash_session');
-      const cs = raw ? JSON.parse(raw) : { isOpen: false };
+      const remote = await api.getCashSession();
+      const cs = remote?.data || { isOpen: false };
       setCashSessionOpen(!!cs?.isOpen);
       if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
+      const rawClients = await AsyncStorage.getItem('cafetrack_clients');
+      const parsedClients = rawClients ? JSON.parse(rawClients) : [];
+      setClients(parsedClients.filter((c: any) => !!String(c?.name || '').trim()));
     })();
   }, []);
   const categories = useMemo<string[]>(() => {
@@ -93,8 +98,8 @@ const POSScreen: React.FC = () => {
   };
 
   const handleCompleteSale = async () => {
-    const cashRaw = await AsyncStorage.getItem('cash_session');
-    const cashSession = cashRaw ? JSON.parse(cashRaw) : { isOpen: false };
+    const cashResponse = await api.getCashSession();
+    const cashSession = cashResponse?.data || { isOpen: false };
     if (!cashSession?.isOpen) {
       Alert.alert("Caja cerrada", "Debes hacer apertura de caja en Contabilidad antes de vender.");
       return;
@@ -349,6 +354,9 @@ const POSScreen: React.FC = () => {
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
           </View>
+          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={() => setCashOpenModal(true)}>
+            <Text style={styles.cashControlText}>{cashSessionOpen ? 'Cerrar caja' : 'Abrir caja'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.checkoutButton} onPress={handleCompleteSale}>
             <Text style={styles.checkoutText}>COMPLETAR VENTA</Text>
           </TouchableOpacity>
@@ -360,6 +368,7 @@ const POSScreen: React.FC = () => {
         onConfirm={handleConfirmPayment}
         total={totals.total}
         loading={processingSale}
+        clients={clients}
       />
       <Modal visible={cashOpenModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
@@ -368,8 +377,7 @@ const POSScreen: React.FC = () => {
             <TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
             {!cashSessionOpen ? (
               <TouchableOpacity style={styles.checkoutButton} onPress={async () => {
-                const data = { isOpen: true, openedAt: new Date().toISOString(), openingAmount: Number(openingAmount || 0) };
-                await AsyncStorage.setItem('cash_session', JSON.stringify(data));
+                await api.openCashSession(Number(openingAmount || 0));
                 setCashSessionOpen(true);
                 setCashOpenModal(false);
               }}>
@@ -384,7 +392,7 @@ const POSScreen: React.FC = () => {
                 const total = salesToday.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
                 const report = { date: new Date().toISOString(), openingAmount: Number(openingAmount || 0), salesCount: salesToday.length, totalSales: total, net: total - Number(openingAmount || 0) };
                 await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-                await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: false }));
+                await api.closeCashSession();
                 setCashSessionOpen(false);
                 setCashOpenModal(false);
                 Alert.alert('Cierre de caja', `Ventas: ${salesToday.length} | Total: $${total.toFixed(2)}`);
@@ -632,6 +640,17 @@ const styles = StyleSheet.create({
     padding: 18,
     alignItems: "center",
     marginTop: 15,
+  },
+  cashControlBtn: {
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cashControlText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   checkoutText: {
     color: "#1a0f0a",

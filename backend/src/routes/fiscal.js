@@ -1,29 +1,52 @@
 const express = require('express');
 const { protect, restrictTo } = require('../middleware/auth');
 const Sale = require('../models/Sale');
+const CashSessionState = require('../models/CashSessionState');
 
 const router = express.Router();
 
-let cashSession = {
-  isOpen: false,
-  openedAt: null,
-  openedBy: null,
-  openingAmount: 0,
+const getCashState = async () => {
+  const existing = await CashSessionState.findOne({ key: 'default' });
+  if (existing) return existing;
+  return CashSessionState.create({ key: 'default' });
 };
 
-router.get('/cash-session', protect, (req, res) => {
+router.get('/cash-session', protect, async (req, res) => {
+  const cashSession = await getCashState();
   res.json({ success: true, data: cashSession });
 });
 
-router.post('/cash-session/open', protect, (req, res) => {
+router.post('/cash-session/open', protect, async (req, res) => {
   const openingAmount = Number(req.body?.openingAmount || 0);
-  cashSession = {
-    isOpen: true,
-    openedAt: new Date().toISOString(),
-    openedBy: req.user?.id || req.user?._id,
-    openingAmount,
-  };
+  const cashSession = await CashSessionState.findOneAndUpdate(
+    { key: 'default' },
+    {
+      $set: {
+        isOpen: true,
+        openedAt: new Date(),
+        openedBy: req.user?.id || req.user?._id,
+        openingAmount,
+      },
+    },
+    { upsert: true, new: true }
+  );
   res.json({ success: true, message: 'Apertura registrada', data: cashSession });
+});
+
+router.post('/cash-session/close', protect, async (req, res) => {
+  const cashSession = await CashSessionState.findOneAndUpdate(
+    { key: 'default' },
+    {
+      $set: {
+        isOpen: false,
+        openedAt: null,
+        openedBy: null,
+        openingAmount: 0,
+      },
+    },
+    { upsert: true, new: true }
+  );
+  res.json({ success: true, message: 'Cierre registrado', data: cashSession });
 });
 
 router.post('/dgii/ecf/generate', protect, async (req, res) => {
