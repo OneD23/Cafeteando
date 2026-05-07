@@ -26,6 +26,16 @@ router.post('/cash-session/open', protect, (req, res) => {
   res.json({ success: true, message: 'Apertura registrada', data: cashSession });
 });
 
+router.post('/cash-session/close', protect, (req, res) => {
+  cashSession = {
+    isOpen: false,
+    openedAt: null,
+    openedBy: null,
+    openingAmount: 0,
+  };
+  res.json({ success: true, message: 'Cierre registrado', data: cashSession });
+});
+
 router.post('/dgii/ecf/generate', protect, async (req, res) => {
   const { saleId, rnc, razonSocial, ncfType = 'B02' } = req.body || {};
   if (!saleId) return res.status(400).json({ success: false, message: 'saleId es requerido' });

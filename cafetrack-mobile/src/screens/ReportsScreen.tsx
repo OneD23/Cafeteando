@@ -132,13 +132,11 @@ export const ReportsScreen: React.FC = () => {
 
   React.useEffect(() => {
     const loadCashState = async () => {
-      const raw = await AsyncStorage.getItem('cash_session');
-      if (raw) {
-        const cs = JSON.parse(raw);
-        if (cs?.isOpen) {
-          setOpenedAt(cs.openedAt);
-          setOpeningAmount(String(cs.openingAmount || '0'));
-        }
+      const response = await api.getCashSession();
+      const cs = response?.data;
+      if (cs?.isOpen) {
+        setOpenedAt(cs.openedAt);
+        setOpeningAmount(String(cs.openingAmount || '0'));
       }
     };
     loadCashState();
@@ -190,7 +188,6 @@ export const ReportsScreen: React.FC = () => {
           <TouchableOpacity style={styles.actionBtn} onPress={async () => {
             await api.openCashSession(Number(openingAmount || 0));
             setOpenedAt(new Date().toISOString());
-            await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: true, openedAt: new Date().toISOString(), openingAmount: Number(openingAmount || 0) }));
             Alert.alert('Listo', 'Apertura registrada');
           }}><Text style={styles.actionBtnText}>Registrar Apertura</Text></TouchableOpacity>
           {openedAt ? <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#c0392b' }]} onPress={async () => {
@@ -202,7 +199,7 @@ export const ReportsScreen: React.FC = () => {
               resultado: netResult,
             };
             await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-            await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: false }));
+            await api.closeCashSession();
             setOpenedAt(null);
             Alert.alert('Cierre realizado', `Resultado del día: $${netResult.toFixed(2)}`);
           }}><Text style={[styles.actionBtnText, { color: '#fff' }]}>Cerrar Caja y Generar Reporte</Text></TouchableOpacity> : null}

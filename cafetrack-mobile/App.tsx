@@ -84,7 +84,7 @@ function AppContent() {
       if (!token) return;
       try {
         const me = await api.me();
-        if (me?.data) store.dispatch({ type: 'auth/setUser', payload: me.data } as any);
+        if (me?.user) store.dispatch({ type: 'auth/setUser', payload: me.user } as any);
       } catch {}
     };
     restoreSession();
