@@ -132,13 +132,11 @@ export const ReportsScreen: React.FC = () => {
 
   React.useEffect(() => {
     const loadCashState = async () => {
-      const raw = await AsyncStorage.getItem('cash_session');
-      if (raw) {
-        const cs = JSON.parse(raw);
-        if (cs?.isOpen) {
-          setOpenedAt(cs.openedAt);
-          setOpeningAmount(String(cs.openingAmount || '0'));
-        }
+      const response = await api.getCashSession();
+      const cs = response?.data;
+      if (cs?.isOpen) {
+        setOpenedAt(cs.openedAt);
+        setOpeningAmount(String(cs.openingAmount || '0'));
       }
     };
     loadCashState();
@@ -171,13 +169,13 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subTabs}>
+      <View style={styles.subTabs}>
         {(['reportes','factura','movimientos','diario','apertura'] as const).map((tab) => (
           <TouchableOpacity key={tab} style={[styles.subTab, accountingTab === tab && styles.subTabActive]} onPress={() => setAccountingTab(tab)}>
             <Text style={[styles.subTabText, accountingTab === tab && styles.subTabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       {accountingTab === 'apertura' && (
@@ -190,7 +188,6 @@ export const ReportsScreen: React.FC = () => {
           <TouchableOpacity style={styles.actionBtn} onPress={async () => {
             await api.openCashSession(Number(openingAmount || 0));
             setOpenedAt(new Date().toISOString());
-            await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: true, openedAt: new Date().toISOString(), openingAmount: Number(openingAmount || 0) }));
             Alert.alert('Listo', 'Apertura registrada');
           }}><Text style={styles.actionBtnText}>Registrar Apertura</Text></TouchableOpacity>
           {openedAt ? <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#c0392b' }]} onPress={async () => {
@@ -202,7 +199,7 @@ export const ReportsScreen: React.FC = () => {
               resultado: netResult,
             };
             await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-            await AsyncStorage.setItem('cash_session', JSON.stringify({ isOpen: false }));
+            await api.closeCashSession();
             setOpenedAt(null);
             Alert.alert('Cierre realizado', `Resultado del día: $${netResult.toFixed(2)}`);
           }}><Text style={[styles.actionBtnText, { color: '#fff' }]}>Cerrar Caja y Generar Reporte</Text></TouchableOpacity> : null}
@@ -384,11 +381,15 @@ const styles = StyleSheet.create({
     color: '#1a0f0a',
   },
   subTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 12,
     gap: 8,
     paddingBottom: 8,
+    alignItems: 'center',
   },
   subTab: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
