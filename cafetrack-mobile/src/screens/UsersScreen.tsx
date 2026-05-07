@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector } from 'react-redux';
 import { api } from '../api/client';
@@ -16,6 +16,7 @@ const UsersScreen: React.FC = () => {
   const [clientForm, setClientForm] = useState({ id: '', name: '', phone: '', email: '' });
   const [salesHistory, setSalesHistory] = useState<any[]>([]);
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null);
 
   const handleCreateUser = async () => {
     if (user?.role !== 'admin') return Alert.alert('Acceso denegado', 'Solo administradores pueden gestionar usuarios.');
@@ -75,17 +76,40 @@ const UsersScreen: React.FC = () => {
             <Text style={styles.modeText}>{c.name} · Total comprado: ${total.toFixed(2)} · Facturas: {invoices.length}</Text>
           </TouchableOpacity>
           {open ? invoices.slice(0, 15).map((inv: any) => (
-            <Text key={`${inv.saleId}-${inv.date}`} style={{ color: '#8b6f4e', marginTop: 4 }}>
-              #{inv.saleId} · {new Date(inv.date).toLocaleDateString()} {new Date(inv.date).toLocaleTimeString()} · ${Number(inv.total || 0).toFixed(2)}
-            </Text>
+            <TouchableOpacity key={`${inv.saleId}-${inv.date}`} onPress={() => setSelectedInvoice(inv)}>
+              <Text style={{ color: '#8b6f4e', marginTop: 4 }}>
+                #{inv.saleId} · {new Date(inv.date).toLocaleDateString()} {new Date(inv.date).toLocaleTimeString()} · ${Number(inv.total || 0).toFixed(2)}
+              </Text>
+            </TouchableOpacity>
           )) : null}
         </View>
       );
     })}
     </>}
-  </ScrollView></SafeAreaView>;
+  </ScrollView>
+  <Modal visible={!!selectedInvoice} transparent animationType='slide' onRequestClose={() => setSelectedInvoice(null)}>
+    <View style={styles.modalBackdrop}>
+      <View style={styles.modalCard}>
+        <Text style={styles.title}>🧾 Factura</Text>
+        <Text style={styles.subtitle}>#{selectedInvoice?.saleId || 'N/A'}</Text>
+        <Text style={styles.subtitle}>Fecha: {selectedInvoice?.date ? new Date(selectedInvoice.date).toLocaleString() : '-'}</Text>
+        <Text style={styles.subtitle}>Cliente: {selectedInvoice?.customerName || 'Consumidor final'}</Text>
+        <Text style={[styles.subtitle, { color: '#27ae60' }]}>Total: ${Number(selectedInvoice?.total || 0).toFixed(2)}</Text>
+        <Text style={[styles.modeText, { textAlign: 'left', marginTop: 8 }]}>Detalle</Text>
+        {(selectedInvoice?.items || []).map((item: any) => (
+          <Text key={`${item.id}-${item.name}`} style={styles.subtitle}>
+            {item.qty} x {item.name} · ${Number(item.price || 0).toFixed(2)}
+          </Text>
+        ))}
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => setSelectedInvoice(null)}>
+          <Text style={styles.primaryText}>Cerrar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+  </SafeAreaView>;
 };
 
-const styles = StyleSheet.create({container:{flex:1,backgroundColor:'#1a0f0a'},content:{padding:16},title:{color:'#f5f1e8',fontSize:28,fontWeight:'800'},subtitle:{color:'#8b6f4e',marginVertical:8},input:{backgroundColor:'#2c1810',borderRadius:10,padding:12,color:'#f5f1e8',borderWidth:1,borderColor:'#4a3428',marginBottom:10},switchRow:{flexDirection:'row',gap:8,marginBottom:10},modeBtn:{flex:1,padding:10,borderRadius:10,borderWidth:1,borderColor:'#4a3428',backgroundColor:'#2c1810'},modeBtnActive:{backgroundColor:'#d4a574'},modeText:{textAlign:'center',color:'#f5f1e8',fontWeight:'700',textTransform:'capitalize'},primaryBtn:{backgroundColor:'#d4a574',padding:14,borderRadius:12,marginTop:10,alignItems:'center'},primaryText:{color:'#1a0f0a',fontWeight:'800'}});
+const styles = StyleSheet.create({container:{flex:1,backgroundColor:'#1a0f0a'},content:{padding:16},title:{color:'#f5f1e8',fontSize:28,fontWeight:'800'},subtitle:{color:'#8b6f4e',marginVertical:4},input:{backgroundColor:'#2c1810',borderRadius:10,padding:12,color:'#f5f1e8',borderWidth:1,borderColor:'#4a3428',marginBottom:10},switchRow:{flexDirection:'row',gap:8,marginBottom:10},modeBtn:{flex:1,padding:10,borderRadius:10,borderWidth:1,borderColor:'#4a3428',backgroundColor:'#2c1810'},modeBtnActive:{backgroundColor:'#d4a574'},modeText:{textAlign:'center',color:'#f5f1e8',fontWeight:'700',textTransform:'capitalize'},primaryBtn:{backgroundColor:'#d4a574',padding:14,borderRadius:12,marginTop:10,alignItems:'center'},primaryText:{color:'#1a0f0a',fontWeight:'800'},modalBackdrop:{flex:1,backgroundColor:'rgba(0,0,0,0.6)',justifyContent:'center',padding:20},modalCard:{backgroundColor:'#1a0f0a',borderRadius:16,padding:16,borderWidth:1,borderColor:'#4a3428'}});
 
 export default UsersScreen;
