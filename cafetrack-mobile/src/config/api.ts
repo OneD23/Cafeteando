@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
+const RAILWAY_API_URL = 'https://cafeteando-production.up.railway.app/api';
+
 const resolveDevApiUrl = (): string => {
   const hostUri =
     Constants.expoConfig?.hostUri ||
@@ -16,7 +18,12 @@ const resolveDevApiUrl = (): string => {
     return 'https://cafeteando-production.up.railway.app/api';
   }
 
-  return 'https://cafeteando-production.up.railway.app/api';
+  return RAILWAY_API_URL;
 };
 
-export const API_URL = 'https://cafeteando-production.up.railway.app/api';
+const normalizeApiUrl = (url: string): string => {
+  const trimmed = url.replace(/\/+$/, '');
+  return trimmed.endsWith('/api') ? trimmed : `${trimmed}/api`;
+};
+
+export const API_URL = normalizeApiUrl(process.env.EXPO_PUBLIC_API_URL || resolveDevApiUrl());
