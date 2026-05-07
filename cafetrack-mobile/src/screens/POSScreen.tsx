@@ -354,6 +354,9 @@ const POSScreen: React.FC = () => {
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
           </View>
+          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={() => setCashOpenModal(true)}>
+            <Text style={styles.cashControlText}>{cashSessionOpen ? 'Cerrar caja' : 'Abrir caja'}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.checkoutButton} onPress={handleCompleteSale}>
             <Text style={styles.checkoutText}>COMPLETAR VENTA</Text>
           </TouchableOpacity>
@@ -637,6 +640,17 @@ const styles = StyleSheet.create({
     padding: 18,
     alignItems: "center",
     marginTop: 15,
+  },
+  cashControlBtn: {
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  cashControlText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '700',
   },
   checkoutText: {
     color: "#1a0f0a",

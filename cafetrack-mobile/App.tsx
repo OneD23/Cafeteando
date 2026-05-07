@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { store } from './src/store';
 import { fetchIngredients, setMovements } from './src/store/inventorySlice';
+import { setTaxEnabled } from './src/store/cartSlice';
 import { fetchProducts } from './src/store/recipesSlice';
 import { hydrateJournal } from './src/store/accountingSlice';
 
@@ -23,6 +24,7 @@ const Tab = createBottomTabNavigator();
 
 const MOVEMENTS_KEY = 'cafetrack_inventory_movements';
 const JOURNAL_KEY = 'cafetrack_accounting_entries';
+const TAX_ENABLED_KEY = 'cafetrack_tax_enabled';
 
 
 function MainTabs() {
@@ -97,12 +99,14 @@ function AppContent() {
 
   React.useEffect(() => {
     const hydrateLocalState = async () => {
-      const [movRaw, jnlRaw] = await Promise.all([
+      const [movRaw, jnlRaw, taxRaw] = await Promise.all([
         AsyncStorage.getItem(MOVEMENTS_KEY),
         AsyncStorage.getItem(JOURNAL_KEY),
+        AsyncStorage.getItem(TAX_ENABLED_KEY),
       ]);
       if (movRaw) store.dispatch(setMovements(JSON.parse(movRaw)) as any);
       if (jnlRaw) store.dispatch(hydrateJournal(JSON.parse(jnlRaw)) as any);
+      if (taxRaw === 'true' || taxRaw === 'false') store.dispatch(setTaxEnabled(taxRaw === 'true') as any);
     };
     hydrateLocalState();
 
@@ -113,6 +117,7 @@ function AppContent() {
         const state = store.getState();
         await AsyncStorage.setItem(MOVEMENTS_KEY, JSON.stringify(state.inventory.movements || []));
         await AsyncStorage.setItem(JOURNAL_KEY, JSON.stringify(state.accounting.entries || []));
+        await AsyncStorage.setItem(TAX_ENABLED_KEY, String(state.cart.taxEnabled));
       }, 250);
     });
 
