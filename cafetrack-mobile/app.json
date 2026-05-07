@@ -36,7 +36,8 @@
         {
           "cameraPermission": "Permitir a CaféTrack acceder a la cámara."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "eas": {
