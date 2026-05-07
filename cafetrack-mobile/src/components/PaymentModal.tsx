@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface PaymentModalProps {
@@ -51,7 +51,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   return (
     <Modal visible={visible} transparent animationType="slide">
       <View style={styles.overlay}>
-        <View style={styles.content}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.keyboardContainer}
+        >
+          <View style={styles.content}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
           <Text style={styles.title}>💳 Pago</Text>
           
           <View style={styles.totalBox}>
@@ -146,7 +155,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );
@@ -158,12 +169,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'flex-end',
   },
+  keyboardContainer: {
+    width: '100%',
+  },
   content: {
     backgroundColor: '#1a0f0a',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     padding: 25,
-    maxHeight: '80%',
+    maxHeight: '85%',
+  },
+  scrollContent: {
+    paddingBottom: 12,
   },
   title: {
     fontSize: 24,
