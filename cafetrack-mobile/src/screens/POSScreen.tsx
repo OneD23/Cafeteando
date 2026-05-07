@@ -35,6 +35,7 @@ const POSScreen: React.FC = () => {
   const [cashOpenModal, setCashOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState("0");
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
+  const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
   React.useEffect(() => {
@@ -43,6 +44,9 @@ const POSScreen: React.FC = () => {
       const cs = remote?.data || { isOpen: false };
       setCashSessionOpen(!!cs?.isOpen);
       if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
+      const rawClients = await AsyncStorage.getItem('cafetrack_clients');
+      const parsedClients = rawClients ? JSON.parse(rawClients) : [];
+      setClients(parsedClients.filter((c: any) => !!String(c?.name || '').trim()));
     })();
   }, []);
   const categories = useMemo<string[]>(() => {
@@ -361,6 +365,7 @@ const POSScreen: React.FC = () => {
         onConfirm={handleConfirmPayment}
         total={totals.total}
         loading={processingSale}
+        clients={clients}
       />
       <Modal visible={cashOpenModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>

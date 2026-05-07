@@ -8,6 +8,7 @@ interface PaymentModalProps {
   onConfirm: (data: any) => void;
   total: number;
   loading?: boolean;
+  clients?: Array<{ id?: string; name: string }>;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -16,6 +17,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   onConfirm,
   total,
   loading,
+  clients = [],
 }) => {
   const [method, setMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [discount, setDiscount] = useState('');
@@ -27,6 +29,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   const parsedCashReceived = cashReceived ? Math.max(parseFloat(cashReceived) || 0, 0) : 0;
   const change = method === 'cash' ? Math.max(parsedCashReceived - payableTotal, 0) : 0;
   const isCashInsufficient = method === 'cash' && parsedCashReceived < payableTotal;
+
+  const filteredClients = React.useMemo(() => {
+    const query = customerName.trim().toLowerCase();
+    if (!query) return [];
+    return clients
+      .filter((c) => String(c?.name || '').trim().toLowerCase().startsWith(query))
+      .slice(0, 8);
+  }, [clients, customerName]);
 
   const handleConfirm = () => {
     onConfirm({
@@ -107,6 +117,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             value={customerName}
             onChangeText={setCustomerName}
           />
+          {filteredClients.length > 0 && (
+            <View style={styles.suggestionsBox}>
+              {filteredClients.map((client) => (
+                <TouchableOpacity
+                  key={`${client.id || client.name}-suggestion`}
+                  style={styles.suggestionRow}
+                  onPress={() => setCustomerName(client.name)}
+                >
+                  <Text style={styles.suggestionText}>{client.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <View style={styles.buttons}>
             <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
@@ -209,6 +232,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#4a3428',
+  },
+
+  suggestionsBox: {
+    backgroundColor: '#2c1810',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  suggestionRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#4a3428',
+  },
+  suggestionText: {
+    color: '#f5f1e8',
   },
 
   changeBox: {
