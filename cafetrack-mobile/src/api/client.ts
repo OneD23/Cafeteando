@@ -189,6 +189,12 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
     });
   }
 
+  async closeCashSession() {
+    return this.request('/fiscal/cash-session/close', {
+      method: 'POST',
+    });
+  }
+
   async generateDgiiEcf(payload: { saleId: string; rnc?: string; razonSocial?: string; ncfType?: string }) {
     return this.request('/fiscal/dgii/ecf/generate', {
       method: 'POST',
