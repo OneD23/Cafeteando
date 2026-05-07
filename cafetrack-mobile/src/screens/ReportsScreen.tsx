@@ -169,13 +169,13 @@ export const ReportsScreen: React.FC = () => {
           </TouchableOpacity>
         ))}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subTabs}>
+      <View style={styles.subTabs}>
         {(['reportes','factura','movimientos','diario','apertura'] as const).map((tab) => (
           <TouchableOpacity key={tab} style={[styles.subTab, accountingTab === tab && styles.subTabActive]} onPress={() => setAccountingTab(tab)}>
             <Text style={[styles.subTabText, accountingTab === tab && styles.subTabTextActive]}>{tab}</Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
       {accountingTab === 'apertura' && (
@@ -381,11 +381,15 @@ const styles = StyleSheet.create({
     color: '#1a0f0a',
   },
   subTabs: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 12,
     gap: 8,
     paddingBottom: 8,
+    alignItems: 'center',
   },
   subTab: {
+    alignSelf: 'flex-start',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
