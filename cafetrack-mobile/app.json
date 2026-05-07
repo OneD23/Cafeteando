@@ -11,7 +11,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#1a0f0a"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cafetrack.mobile"
@@ -21,7 +23,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a0f0a"
-      }
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-secure-store",
@@ -31,6 +37,11 @@
           "cameraPermission": "Permitir a CaféTrack acceder a la cámara."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "4eb6171d-a2e6-4914-9a1f-b935e21c72b5"
+      }
+    }
   }
 }
