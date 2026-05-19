@@ -10,7 +10,8 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
+import { addJournalEntry } from '../store/accountingSlice';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -19,7 +20,9 @@ const { width } = Dimensions.get('window');
 
 export const ReportsScreen: React.FC = () => {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day');
-  const [accountingTab, setAccountingTab] = useState<'reportes' | 'factura' | 'movimientos' | 'diario' | 'apertura'>('reportes');
+  const [accountingTab, setAccountingTab] = useState<'reportes' | 'factura' | 'movimientos' | 'diario' | 'apertura' | 'gastos'>('reportes');
+  const [expenseName, setExpenseName] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
   const [openingAmount, setOpeningAmount] = useState('0');
   const [openedAt, setOpenedAt] = useState<string | null>(null);
   const [dgiiResult, setDgiiResult] = useState<any>(null);
@@ -27,6 +30,7 @@ export const ReportsScreen: React.FC = () => {
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
+  const dispatch = useDispatch();
 
 
   const getStartDate = (selected: 'day' | 'week' | 'month') => {
@@ -170,7 +174,7 @@ export const ReportsScreen: React.FC = () => {
         ))}
       </View>
       <View style={styles.subTabs}>
-        {(['reportes','factura','movimientos','diario','apertura'] as const).map((tab) => (
+        {(['reportes','factura','movimientos','diario','apertura','gastos'] as const).map((tab) => (
           <TouchableOpacity key={tab} style={[styles.subTab, accountingTab === tab && styles.subTabActive]} onPress={() => setAccountingTab(tab)}>
             <Text style={[styles.subTabText, accountingTab === tab && styles.subTabTextActive]}>{tab}</Text>
           </TouchableOpacity>
@@ -308,6 +312,53 @@ export const ReportsScreen: React.FC = () => {
       </View>
       </>
       )}
+
+      {accountingTab === 'gastos' && (
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionTitle}>💸 Registro de Gastos</Text>
+          <Text style={styles.movementDetail}>Registra gastos operativos diarios como hielo, vasos, servilletas u otros insumos.</Text>
+          <TextInput
+            value={expenseName}
+            onChangeText={setExpenseName}
+            style={styles.input}
+            placeholder='Descripción del gasto (ej. Hielo)'
+            placeholderTextColor='#8b6f4e'
+          />
+          <TextInput
+            value={expenseAmount}
+            onChangeText={setExpenseAmount}
+            keyboardType='decimal-pad'
+            style={styles.input}
+            placeholder='Monto del gasto'
+            placeholderTextColor='#8b6f4e'
+          />
+          <TouchableOpacity
+            style={styles.actionBtn}
+            onPress={() => {
+              const name = expenseName.trim();
+              const amount = Number(expenseAmount);
+
+              if (!name) return Alert.alert('Dato requerido', 'Ingresa una descripción del gasto.');
+              if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Monto inválido', 'Ingresa un monto mayor a 0.');
+
+              dispatch(addJournalEntry({
+                direction: 'out',
+                category: 'other',
+                description: `Gasto operativo: ${name}`,
+                amount,
+                reference: 'manual-expense',
+              }));
+
+              setExpenseName('');
+              setExpenseAmount('');
+              Alert.alert('Gasto registrado', `Se registró $${amount.toFixed(2)} en ${name}.`);
+            }}
+          >
+            <Text style={styles.actionBtnText}>Guardar gasto</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {accountingTab === 'factura' && (
         <View style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>🧾 Facturación</Text>
