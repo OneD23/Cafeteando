@@ -3,7 +3,7 @@ import {
   View,
   Text,
   StyleSheet,
-    ScrollView,
+  ScrollView,
   TouchableOpacity,
   Dimensions,
   TextInput,
@@ -15,6 +15,8 @@ import { addJournalEntry } from '../store/accountingSlice';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 const { width } = Dimensions.get('window');
 
@@ -79,6 +81,10 @@ export const ReportsScreen: React.FC = () => {
     .reduce((sum: number, e: any) => sum + e.amount, 0);
   const netResult = totalEntries - totalExits;
 
+  const totalExpenses = filteredEntries
+    .filter((e: any) => e.direction === 'out' && e.description?.toLowerCase()?.includes('gasto operativo'))
+    .reduce((sum: number, e: any) => sum + e.amount, 0);
+
   const stats = [
     { 
       label: 'Valor Inventario', 
@@ -123,6 +129,12 @@ export const ReportsScreen: React.FC = () => {
       color: '#c0392b'
     },
     { 
+      label: 'Gastos', 
+      value: `$${totalExpenses.toFixed(2)}`,
+      icon: 'receipt-outline',
+      color: '#e67e22'
+    },
+    { 
       label: 'Resultado', 
       value: `$${netResult.toFixed(2)}`,
       icon: 'trending-up-outline',
@@ -145,6 +157,37 @@ export const ReportsScreen: React.FC = () => {
     };
     loadCashState();
   }, []);
+
+
+  const exportReportToPdf = async (reportName: string, rows: Array<{ label: string; value: string }>) => {
+    try {
+      const generatedAt = new Date();
+      const html = `
+        <html>
+          <body style="font-family: Helvetica, Arial, sans-serif; padding: 24px; color: #1a0f0a;">
+            <h1 style="margin-bottom: 4px;">Cafeteando · ${reportName}</h1>
+            <p style="margin-top: 0; color: #555;">Generado: ${generatedAt.toLocaleString()}</p>
+            <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+              ${rows
+                .map((row) => `<tr><td style="border:1px solid #ddd;padding:8px;font-weight:600;">${row.label}</td><td style="border:1px solid #ddd;padding:8px;">${row.value}</td></tr>`)
+                .join('')}
+            </table>
+          </body>
+        </html>
+      `;
+
+      const { uri } = await Print.printToFileAsync({ html });
+      const canShare = await Sharing.isAvailableAsync();
+
+      if (canShare) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `Guardar ${reportName}` });
+      } else {
+        Alert.alert('PDF generado', `Se guardó en: ${uri}`);
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo generar el PDF del reporte.');
+    }
+  };
 
   React.useEffect(() => {
     const loadInvoices = async () => {
@@ -194,12 +237,20 @@ export const ReportsScreen: React.FC = () => {
             setOpenedAt(new Date().toISOString());
             Alert.alert('Listo', 'Apertura registrada');
           }}><Text style={styles.actionBtnText}>Registrar Apertura</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => exportReportToPdf('Cierre de caja', [
+            { label: 'Monto apertura', value: `$${Number(openingAmount || 0).toFixed(2)}` },
+            { label: 'Ingresos', value: `$${totalEntries.toFixed(2)}` },
+            { label: 'Salidas', value: `$${totalExits.toFixed(2)}` },
+            { label: 'Gastos', value: `$${totalExpenses.toFixed(2)}` },
+            { label: 'Resultado', value: `$${netResult.toFixed(2)}` },
+          ])}><Text style={styles.actionBtnText}>Guardar PDF Cierre Caja</Text></TouchableOpacity>
           {openedAt ? <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#c0392b' }]} onPress={async () => {
             const report = {
               date: new Date().toISOString(),
               openingAmount: Number(openingAmount || 0),
               ingresos: totalEntries,
               salidas: totalExits,
+              gastos: totalExpenses,
               resultado: netResult,
             };
             await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
@@ -211,6 +262,16 @@ export const ReportsScreen: React.FC = () => {
       )}
       {accountingTab === 'reportes' && (
       <>
+      <TouchableOpacity style={[styles.actionBtn, { marginHorizontal: 15 }]} onPress={() => exportReportToPdf('Reporte general', [
+        { label: 'Valor inventario', value: `$${totalInventoryValue.toFixed(2)}` },
+        { label: 'Movimientos', value: String(totalMovements) },
+        { label: 'Entradas', value: `$${totalEntries.toFixed(2)}` },
+        { label: 'Salidas', value: `$${totalExits.toFixed(2)}` },
+        { label: 'Gastos', value: `$${totalExpenses.toFixed(2)}` },
+        { label: 'Resultado', value: `$${netResult.toFixed(2)}` },
+      ])}>
+        <Text style={styles.actionBtnText}>Guardar PDF Reporte General</Text>
+      </TouchableOpacity>
       <View style={styles.statsGrid}>
         {stats.map((stat, index) => (
           <View key={index} style={styles.statCard}>
@@ -355,6 +416,13 @@ export const ReportsScreen: React.FC = () => {
             }}
           >
             <Text style={styles.actionBtnText}>Guardar gasto</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => exportReportToPdf('Reporte de gastos', [
+            { label: 'Gastos del período', value: `$${totalExpenses.toFixed(2)}` },
+            { label: 'Salidas totales', value: `$${totalExits.toFixed(2)}` },
+            { label: 'Resultado neto', value: `$${netResult.toFixed(2)}` },
+          ])}>
+            <Text style={styles.actionBtnText}>Guardar PDF de Gastos</Text>
           </TouchableOpacity>
         </View>
       )}
