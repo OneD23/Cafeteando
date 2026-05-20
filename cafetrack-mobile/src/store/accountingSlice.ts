@@ -20,6 +20,9 @@ const initialState: AccountingState = {
   entries: [],
 };
 
+const roundMoney = (amount: number): number =>
+  Math.round((Number(amount) + Number.EPSILON) * 100) / 100;
+
 const createEntry = (payload: Omit<JournalEntry, 'id' | 'date'>): JournalEntry => ({
   ...payload,
   id: `jnl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -44,7 +47,7 @@ const accountingSlice = createSlice({
         direction: 'in',
         category: 'sale',
         description: `Venta registrada (${saleId})`,
-        amount: revenue,
+        amount: roundMoney(revenue),
         reference: saleId,
       }));
 
@@ -52,7 +55,7 @@ const accountingSlice = createSlice({
         direction: 'out',
         category: 'cogs',
         description: `Costo de venta (${saleId})`,
-        amount: cogs,
+        amount: roundMoney(cogs),
         reference: saleId,
       }));
     },
