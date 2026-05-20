@@ -8,6 +8,8 @@ const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
+const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
 // @route   POST /api/sales
 // @desc    Crear venta y descontar inventario
 // @access  Private
@@ -56,9 +58,11 @@ router.post('/', protect, async (req, res) => {
         }
       }
 
-      const itemTotal = product.price * item.quantity;
-      subtotal += itemTotal;
-      totalCost += itemCost * item.quantity;
+      itemCost = roundMoney(itemCost);
+
+      const itemTotal = roundMoney(product.price * item.quantity);
+      subtotal = roundMoney(subtotal + itemTotal);
+      totalCost = roundMoney(totalCost + (itemCost * item.quantity));
 
       saleItems.push({
         product: product._id,
@@ -75,7 +79,7 @@ router.post('/', protect, async (req, res) => {
           const deductQty = ri.quantity * item.quantity;
           const previousStock = ingredient.stock;
 
-          ingredient.stock -= deductQty;
+          ingredient.stock = roundMoney(ingredient.stock - deductQty);
           await ingredient.save({ session });
 
           // Registrar movimiento
@@ -101,13 +105,14 @@ router.post('/', protect, async (req, res) => {
     // Aplicar descuento
     let discountAmount = 0;
     if (discount && discount.type !== 'none') {
-      discountAmount = discount.type === 'percentage' 
-        ? subtotal * (discount.value / 100)
-        : Math.min(discount.value, subtotal);
+      discountAmount = discount.type === 'percentage'
+        ? roundMoney(subtotal * (discount.value / 100))
+        : roundMoney(Math.min(discount.value, subtotal));
     }
 
-    const tax = (subtotal - discountAmount) * 0.16;
-    const total = subtotal - discountAmount + tax;
+    const taxableBase = roundMoney(subtotal - discountAmount);
+    const tax = roundMoney(taxableBase * 0.16);
+    const total = roundMoney(taxableBase + tax);
 
     const now = new Date();
     const prefix = `SALE-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
@@ -142,7 +147,7 @@ router.post('/', protect, async (req, res) => {
       stats: {
         totalRevenue: total,
         totalCost,
-        profit: total - totalCost
+        profit: roundMoney(total - totalCost)
       }
     });
 

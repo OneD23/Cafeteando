@@ -15,6 +15,9 @@ interface InventoryState {
   lowStockAlerts: string[];
 }
 
+const roundQuantity = (value: number): number =>
+  Math.round((Number(value) + Number.EPSILON) * 10000) / 10000;
+
 // Thunks para API
 export const fetchIngredients = createAsyncThunk(
   'inventory/fetchIngredients',
@@ -104,10 +107,10 @@ const inventorySlice = createSlice({
         const index = state.ingredients.findIndex((i: any) => i.id === ri.ingredientId);
         if (index !== -1) {
           const ingredient: any = state.ingredients[index];
-          const deductQty = ri.quantity * quantity;
+          const deductQty = roundQuantity(ri.quantity * quantity);
           const previousStock = ingredient.stock;
 
-          ingredient.stock = Math.max(0, ingredient.stock - deductQty);
+          ingredient.stock = roundQuantity(Math.max(0, ingredient.stock - deductQty));
 
           state.movements.push({
             id: `mov-${Date.now()}-${ri.ingredientId}`,
