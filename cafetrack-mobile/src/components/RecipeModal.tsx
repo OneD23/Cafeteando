@@ -155,7 +155,11 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             </TouchableOpacity>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+          >
             {/* Nombre */}
             <Text style={styles.label}>Nombre del producto</Text>
             <TextInput
@@ -303,6 +307,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: '#f5f1e8',
+  },
+  scrollContent: {
+    paddingBottom: 16,
   },
   label: {
     color: '#d4a574',
