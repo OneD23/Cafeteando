@@ -49,6 +49,44 @@ export const InventoryScreen: React.FC = () => {
 
   const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
 
+  const requestNumericInput = (
+    title: string,
+    message: string,
+    onConfirm: (value: number) => void
+  ) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const raw = window.prompt(message, '0');
+      if (raw === null) return;
+      const parsed = parseFloat(raw);
+      if (isNaN(parsed)) {
+        Alert.alert('Valor inválido', 'Ingresa un número válido.');
+        return;
+      }
+      onConfirm(parsed);
+      return;
+    }
+
+    Alert.prompt(
+      title,
+      message,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Aceptar',
+          onPress: (value?: string) => {
+            const parsed = parseFloat(value || '0');
+            if (isNaN(parsed)) {
+              Alert.alert('Valor inválido', 'Ingresa un número válido.');
+              return;
+            }
+            onConfirm(parsed);
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
   const handleAddIngredient = () => {
     if (!ingName || !ingStock || !ingMinStock || !ingCost) {
       Alert.alert('Error', 'Completa todos los campos');
@@ -78,33 +116,21 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const handleRestock = (ingredient: any) => {
-    Alert.prompt(
-      'Reposición',
-      `Cantidad a añadir a ${ingredient.name}:`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Añadir',
-          onPress: (value?: string) => {
-            const qty = parseFloat(value || '0');
-            if (qty > 0) {
-              dispatch(restockIngredient({
-                ingredientId: ingredient.id,
-                quantity: qty,
-                reason: 'Reposición manual',
-              }));
-              dispatch(addJournalEntry({
-                direction: 'in',
-                category: 'inventory',
-                description: `Reposición: ${ingredient.name}`,
-                amount: qty * (ingredient.costPerUnit || 0),
-              }));
-            }
-          },
-        },
-      ],
-      'plain-text'
-    );
+    requestNumericInput('Reposición', `Cantidad a añadir a ${ingredient.name}:`, (qty) => {
+      if (qty <= 0) return;
+
+      dispatch(restockIngredient({
+        ingredientId: entityId(ingredient),
+        quantity: qty,
+        reason: 'Reposición manual',
+      }));
+      dispatch(addJournalEntry({
+        direction: 'in',
+        category: 'inventory',
+        description: `Reposición: ${ingredient.name}`,
+        amount: qty * (ingredient.costPerUnit || 0),
+      }));
+    });
   };
 
   const handleDeleteProduct = (product: any) => {
@@ -181,22 +207,19 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
-              Alert.prompt('Ajuste', 'Nuevo stock:', (value?: string) => {
-                const newStock = parseFloat(value || '0');
-                if (!isNaN(newStock)) {
-                  const diff = newStock - item.stock;
-                  dispatch(adjustStock({
-                    ingredientId: item.id,
-                    newStock,
-                    reason: 'Ajuste manual',
-                  }));
-                  dispatch(addJournalEntry({
-                    direction: diff >= 0 ? 'in' : 'out',
-                    category: 'adjustment',
-                    description: `Ajuste inventario: ${item.name}`,
-                    amount: Math.abs(diff) * (item.costPerUnit || 0),
-                  }));
-                }
+              requestNumericInput('Ajuste', 'Nuevo stock:', (newStock) => {
+                const diff = newStock - item.stock;
+                dispatch(adjustStock({
+                  ingredientId: entityId(item),
+                  newStock,
+                  reason: 'Ajuste manual',
+                }));
+                dispatch(addJournalEntry({
+                  direction: diff >= 0 ? 'in' : 'out',
+                  category: 'adjustment',
+                  description: `Ajuste inventario: ${item.name}`,
+                  amount: Math.abs(diff) * (item.costPerUnit || 0),
+                }));
               });
             }}
           >
