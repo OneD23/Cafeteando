@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -45,6 +46,8 @@ export const InventoryScreen: React.FC = () => {
   const [ingCost, setIngCost] = useState('');
 
   const units = ['g', 'ml', 'unidad', 'oz'];
+
+  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
 
   const handleAddIngredient = () => {
     if (!ingName || !ingStock || !ingMinStock || !ingCost) {
@@ -82,7 +85,7 @@ export const InventoryScreen: React.FC = () => {
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Añadir',
-          onPress: (value) => {
+          onPress: (value?: string) => {
             const qty = parseFloat(value || '0');
             if (qty > 0) {
               dispatch(restockIngredient({
@@ -178,7 +181,7 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
-              Alert.prompt('Ajuste', 'Nuevo stock:', (value) => {
+              Alert.prompt('Ajuste', 'Nuevo stock:', (value?: string) => {
                 const newStock = parseFloat(value || '0');
                 if (!isNaN(newStock)) {
                   const diff = newStock - item.stock;
@@ -206,7 +209,7 @@ export const InventoryScreen: React.FC = () => {
             onPress={() => {
               Alert.alert('Eliminar', `¿Eliminar ${item.name}?`, [
                 { text: 'Cancelar', style: 'cancel' },
-                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(item.id)) },
+                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(entityId(item))) },
               ]);
             }}
           >
@@ -219,7 +222,8 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const renderProductItem = ({ item }: { item: any }) => {
-    const recipe = getRecipeForProduct(item.id);
+    const productId = entityId(item);
+    const recipe = getRecipeForProduct(productId);
     const totalCost = recipe?.items.reduce((sum: number, ri: any) => {
       const ing = ingredients.find((i: any) => i.id === ri.ingredientId);
       return sum + (ing?.costPerUnit || 0) * ri.quantity;
@@ -276,7 +280,7 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={[styles.productActionBtn, !item.isActive && styles.inactiveBtn]}
             onPress={() => {
-              dispatch(toggleProductActive(item.id));
+              dispatch(toggleProductActive(productId));
               Alert.alert(
                 'Estado actualizado',
                 item.isActive ? `${item.name} ahora está inactivo` : `${item.name} ahora está activo`
@@ -348,14 +352,14 @@ export const InventoryScreen: React.FC = () => {
       {activeTab === 'ingredients' ? (
         <FlatList
           data={filteredIngredients}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderIngredientItem}
           contentContainerStyle={styles.list}
         />
       ) : (
         <FlatList
           data={filteredProducts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderProductItem}
           contentContainerStyle={styles.list}
         />
@@ -375,6 +379,10 @@ export const InventoryScreen: React.FC = () => {
       <Modal visible={showIngredientModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
             <Text style={styles.modalTitle}>➕ Nuevo Ingrediente</Text>
             
             <Text style={styles.inputLabel}>Nombre</Text>
@@ -437,6 +445,7 @@ export const InventoryScreen: React.FC = () => {
                 <Text style={styles.saveBtnText}>Guardar</Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -713,6 +722,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     padding: 25,
     maxHeight: '80%',
+  },
+  modalScrollContent: {
+    paddingBottom: 10,
   },
   modalTitle: {
     fontSize: 24,
