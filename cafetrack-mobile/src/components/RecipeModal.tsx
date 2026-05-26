@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -27,11 +27,14 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   editingProduct,
 }) => {
   const dispatch = useDispatch();
+  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
+
   const ingredients = useSelector((state: any) => state.inventory.ingredients);
   const recipes = useSelector((state: any) => state.recipes.recipes);
+  const editingProductId = entityId(editingProduct);
   const existingRecipe = useMemo(
-    () => recipes.find((r: any) => r.productId === editingProduct?.id),
-    [recipes, editingProduct]
+    () => recipes.find((r: any) => String(r.productId) === editingProductId),
+    [recipes, editingProductId]
   );
   
   const [name, setName] = useState(editingProduct?.name || '');
@@ -41,6 +44,17 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   const [selectedIngredients, setSelectedIngredients] = useState<RecipeItem[]>(existingRecipe?.items || []);
   const [prepTime, setPrepTime] = useState(existingRecipe?.preparationTime?.toString() || '2');
 
+  useEffect(() => {
+    if (!visible) return;
+
+    setName(editingProduct?.name || '');
+    setPrice(editingProduct?.price?.toString() || '');
+    setCategory(editingProduct?.category || 'coffee');
+    setProductImage(editingProduct?.image || '');
+    setSelectedIngredients(existingRecipe?.items || []);
+    setPrepTime(existingRecipe?.preparationTime?.toString() || '2');
+  }, [visible, editingProduct, existingRecipe]);
+
   const categories = [
     { id: 'coffee', name: 'Café', icon: '☕' },
     { id: 'pastry', name: 'Pastelería', icon: '🥐' },
@@ -48,7 +62,6 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
     { id: 'food', name: 'Comida', icon: '🥪' },
   ];
 
-  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
 
   const toggleIngredient = (ingredient: Ingredient) => {
     const ingId = entityId(ingredient);
@@ -103,22 +116,31 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       return;
     }
 
-    dispatch(addProduct({
-      product: {
-        name,
-        price: parseFloat(price),
-        category,
-        icon: categories.find(c => c.id === category)?.icon || '☕',
-        image: productImage || undefined,
-        isActive: true,
-        hasRecipe: true,
-      },
-      recipe: {
-        items: validItems,
-        preparationTime: parseInt(prepTime) || 2,
-        image: productImage || undefined,
-      },
-    }));
+    const productPayload = {
+      name,
+      price: parseFloat(price),
+      category,
+      icon: categories.find(c => c.id === category)?.icon || '☕',
+      image: productImage || undefined,
+      isActive: editingProduct?.isActive ?? true,
+      hasRecipe: true,
+    };
+
+    const recipePayload = {
+      items: validItems,
+      preparationTime: parseInt(prepTime) || 2,
+      image: productImage || undefined,
+    };
+
+    if (editingProductId) {
+      dispatch(updateProduct({ id: editingProductId, ...productPayload }));
+      dispatch(updateRecipe({ productId: editingProductId, ...recipePayload }));
+    } else {
+      dispatch(addProduct({
+        product: productPayload,
+        recipe: recipePayload,
+      }));
+    }
 
     // Reset
     setName('');
@@ -225,7 +247,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             {/* Ingredientes */}
             <Text style={styles.label}>Ingredientes y gramaje</Text>
             {ingredients.map((ing: Ingredient) => (
-              <View key={ing.id} style={styles.ingredientRow}>
+              <View key={entityId(ing)} style={styles.ingredientRow}>
                 <TouchableOpacity 
                   style={styles.ingredientCheck}
                   onPress={() => toggleIngredient(ing)}
@@ -241,15 +263,15 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
                   </View>
                 </TouchableOpacity>
                 
-                {selectedIngredients.find(i => i.ingredientId === ing.id) && (
+                {selectedIngredients.find(i => String(i.ingredientId) === entityId(ing)) && (
                   <View style={styles.qtyInputWrap}>
                     <TextInput
                       style={styles.qtyInput}
                       placeholder={`0 ${ing.unit}`}
                       placeholderTextColor="#8b6f4e"
                       keyboardType="decimal-pad"
-                      value={(selectedIngredients.find(i => i.ingredientId === ing.id)?.quantity || '').toString()}
-                      onChangeText={(text) => updateQuantity(ing.id, text)}
+                      value={(selectedIngredients.find(i => String(i.ingredientId) === entityId(ing))?.quantity || '').toString()}
+                      onChangeText={(text) => updateQuantity(entityId(ing), text)}
                     />
                     <Text style={styles.qtyUnitBadge}>{ing.unit}</Text>
                   </View>

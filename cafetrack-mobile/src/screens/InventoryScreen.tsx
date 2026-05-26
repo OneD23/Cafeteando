@@ -47,6 +47,8 @@ export const InventoryScreen: React.FC = () => {
 
   const units = ['g', 'ml', 'unidad', 'oz'];
 
+  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
+
   const handleAddIngredient = () => {
     if (!ingName || !ingStock || !ingMinStock || !ingCost) {
       Alert.alert('Error', 'Completa todos los campos');
@@ -207,7 +209,7 @@ export const InventoryScreen: React.FC = () => {
             onPress={() => {
               Alert.alert('Eliminar', `¿Eliminar ${item.name}?`, [
                 { text: 'Cancelar', style: 'cancel' },
-                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(item.id)) },
+                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(entityId(item))) },
               ]);
             }}
           >
@@ -220,7 +222,8 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const renderProductItem = ({ item }: { item: any }) => {
-    const recipe = getRecipeForProduct(item.id);
+    const productId = entityId(item);
+    const recipe = getRecipeForProduct(productId);
     const totalCost = recipe?.items.reduce((sum: number, ri: any) => {
       const ing = ingredients.find((i: any) => i.id === ri.ingredientId);
       return sum + (ing?.costPerUnit || 0) * ri.quantity;
@@ -277,7 +280,7 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={[styles.productActionBtn, !item.isActive && styles.inactiveBtn]}
             onPress={() => {
-              dispatch(toggleProductActive(item.id));
+              dispatch(toggleProductActive(productId));
               Alert.alert(
                 'Estado actualizado',
                 item.isActive ? `${item.name} ahora está inactivo` : `${item.name} ahora está activo`
@@ -349,14 +352,14 @@ export const InventoryScreen: React.FC = () => {
       {activeTab === 'ingredients' ? (
         <FlatList
           data={filteredIngredients}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderIngredientItem}
           contentContainerStyle={styles.list}
         />
       ) : (
         <FlatList
           data={filteredProducts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderProductItem}
           contentContainerStyle={styles.list}
         />
