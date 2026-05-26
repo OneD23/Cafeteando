@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -82,7 +83,7 @@ export const InventoryScreen: React.FC = () => {
         { text: 'Cancelar', style: 'cancel' },
         {
           text: 'Añadir',
-          onPress: (value) => {
+          onPress: (value?: string) => {
             const qty = parseFloat(value || '0');
             if (qty > 0) {
               dispatch(restockIngredient({
@@ -178,7 +179,7 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
-              Alert.prompt('Ajuste', 'Nuevo stock:', (value) => {
+              Alert.prompt('Ajuste', 'Nuevo stock:', (value?: string) => {
                 const newStock = parseFloat(value || '0');
                 if (!isNaN(newStock)) {
                   const diff = newStock - item.stock;
@@ -375,6 +376,10 @@ export const InventoryScreen: React.FC = () => {
       <Modal visible={showIngredientModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
             <Text style={styles.modalTitle}>➕ Nuevo Ingrediente</Text>
             
             <Text style={styles.inputLabel}>Nombre</Text>
@@ -437,6 +442,7 @@ export const InventoryScreen: React.FC = () => {
                 <Text style={styles.saveBtnText}>Guardar</Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -713,6 +719,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     padding: 25,
     maxHeight: '80%',
+  },
+  modalScrollContent: {
+    paddingBottom: 10,
   },
   modalTitle: {
     fontSize: 24,
