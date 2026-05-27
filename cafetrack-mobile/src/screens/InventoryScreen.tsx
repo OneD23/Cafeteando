@@ -10,6 +10,7 @@ import {
   Modal,
   Image,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -35,6 +36,7 @@ export const InventoryScreen: React.FC = () => {
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [showIngredientModal, setShowIngredientModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingIngredient, setEditingIngredient] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Formulario de ingrediente
@@ -46,62 +48,102 @@ export const InventoryScreen: React.FC = () => {
 
   const units = ['g', 'ml', 'unidad', 'oz'];
 
-  const handleAddIngredient = () => {
-    if (!ingName || !ingStock || !ingMinStock || !ingCost) {
-      Alert.alert('Error', 'Completa todos los campos');
+  const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
+
+  const requestNumericInput = (
+    title: string,
+    message: string,
+    onConfirm: (value: number) => void
+  ) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const raw = window.prompt(message, '0');
+      if (raw === null) return;
+      const parsed = parseFloat(raw);
+      if (isNaN(parsed)) {
+        Alert.alert('Valor inválido', 'Ingresa un número válido.');
+        return;
+      }
+      onConfirm(parsed);
       return;
     }
 
-    dispatch(addIngredient({
-      name: ingName,
-      unit: ingUnit as any,
-      stock: parseFloat(ingStock),
-      minStock: parseFloat(ingMinStock),
-      costPerUnit: parseFloat(ingCost),
-    }));
-    dispatch(addJournalEntry({
-      direction: 'in',
-      category: 'inventory',
-      description: `Alta ingrediente: ${ingName}`,
-      amount: parseFloat(ingStock) * parseFloat(ingCost),
-    }));
-
-    // Reset
-    setIngName('');
-    setIngStock('');
-    setIngMinStock('');
-    setIngCost('');
-    setShowIngredientModal(false);
-  };
-
-  const handleRestock = (ingredient: any) => {
     Alert.prompt(
-      'Reposición',
-      `Cantidad a añadir a ${ingredient.name}:`,
+      title,
+      message,
       [
         { text: 'Cancelar', style: 'cancel' },
         {
-          text: 'Añadir',
-          onPress: (value) => {
-            const qty = parseFloat(value || '0');
-            if (qty > 0) {
-              dispatch(restockIngredient({
-                ingredientId: ingredient.id,
-                quantity: qty,
-                reason: 'Reposición manual',
-              }));
-              dispatch(addJournalEntry({
-                direction: 'in',
-                category: 'inventory',
-                description: `Reposición: ${ingredient.name}`,
-                amount: qty * (ingredient.costPerUnit || 0),
-              }));
+          text: 'Aceptar',
+          onPress: (value?: string) => {
+            const parsed = parseFloat(value || '0');
+            if (isNaN(parsed)) {
+              Alert.alert('Valor inválido', 'Ingresa un número válido.');
+              return;
             }
+            onConfirm(parsed);
           },
         },
       ],
       'plain-text'
     );
+  };
+
+  const resetIngredientForm = () => {
+    setIngName('');
+    setIngUnit('g');
+    setIngStock('');
+    setIngMinStock('');
+    setIngCost('');
+    setEditingIngredient(null);
+  };
+
+  const handleSaveIngredient = () => {
+    if (!ingName || !ingStock || !ingMinStock || !ingCost) {
+      Alert.alert('Error', 'Completa todos los campos');
+      return;
+    }
+
+    const payload = {
+      name: ingName,
+      unit: ingUnit as any,
+      stock: parseFloat(ingStock),
+      minStock: parseFloat(ingMinStock),
+      costPerUnit: parseFloat(ingCost),
+    };
+
+    if (editingIngredient) {
+      dispatch(updateIngredient({ ...editingIngredient, ...payload, id: entityId(editingIngredient) }));
+      Alert.alert('Actualizado', `${ingName} fue actualizado correctamente.`);
+    } else {
+      dispatch(addIngredient(payload));
+      dispatch(addJournalEntry({
+        direction: 'in',
+        category: 'inventory',
+        description: `Alta ingrediente: ${ingName}`,
+        amount: parseFloat(ingStock) * parseFloat(ingCost),
+      }));
+    }
+
+    resetIngredientForm();
+    setShowIngredientModal(false);
+  };
+
+  const handleRestock = (ingredient: any) => {
+    requestNumericInput('Reposición', `Cantidad a añadir a ${ingredient.name}:`, (qty) => {
+      if (qty <= 0) return;
+
+      dispatch(restockIngredient({
+        ingredientId: entityId(ingredient),
+        quantity: qty,
+        reason: 'Reposición manual',
+      }));
+      dispatch(addJournalEntry({
+        direction: 'in',
+        category: 'inventory',
+        description: `Reposición: ${ingredient.name}`,
+        amount: qty * (ingredient.costPerUnit || 0),
+      }));
+    });
   };
 
   const handleDeleteProduct = (product: any) => {
@@ -178,23 +220,13 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
-              Alert.prompt('Ajuste', 'Nuevo stock:', (value) => {
-                const newStock = parseFloat(value || '0');
-                if (!isNaN(newStock)) {
-                  const diff = newStock - item.stock;
-                  dispatch(adjustStock({
-                    ingredientId: item.id,
-                    newStock,
-                    reason: 'Ajuste manual',
-                  }));
-                  dispatch(addJournalEntry({
-                    direction: diff >= 0 ? 'in' : 'out',
-                    category: 'adjustment',
-                    description: `Ajuste inventario: ${item.name}`,
-                    amount: Math.abs(diff) * (item.costPerUnit || 0),
-                  }));
-                }
-              });
+              setEditingIngredient(item);
+              setIngName(item.name || '');
+              setIngUnit(item.unit || 'g');
+              setIngStock(String(item.stock ?? ''));
+              setIngMinStock(String(item.minStock ?? ''));
+              setIngCost(String(item.costPerUnit ?? ''));
+              setShowIngredientModal(true);
             }}
           >
             <Ionicons name="create" size={20} color="#d4a574" />
@@ -204,9 +236,16 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
+              const confirmDelete = () => dispatch(deleteIngredient(entityId(item)));
+
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                if (window.confirm(`¿Eliminar ${item.name}?`)) confirmDelete();
+                return;
+              }
+
               Alert.alert('Eliminar', `¿Eliminar ${item.name}?`, [
                 { text: 'Cancelar', style: 'cancel' },
-                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(item.id)) },
+                { text: 'Eliminar', style: 'destructive', onPress: confirmDelete },
               ]);
             }}
           >
@@ -219,7 +258,8 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const renderProductItem = ({ item }: { item: any }) => {
-    const recipe = getRecipeForProduct(item.id);
+    const productId = entityId(item);
+    const recipe = getRecipeForProduct(productId);
     const totalCost = recipe?.items.reduce((sum: number, ri: any) => {
       const ing = ingredients.find((i: any) => i.id === ri.ingredientId);
       return sum + (ing?.costPerUnit || 0) * ri.quantity;
@@ -276,7 +316,7 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={[styles.productActionBtn, !item.isActive && styles.inactiveBtn]}
             onPress={() => {
-              dispatch(toggleProductActive(item.id));
+              dispatch(toggleProductActive(productId));
               Alert.alert(
                 'Estado actualizado',
                 item.isActive ? `${item.name} ahora está inactivo` : `${item.name} ahora está activo`
@@ -336,7 +376,14 @@ export const InventoryScreen: React.FC = () => {
       {/* Add Button */}
       <TouchableOpacity 
         style={styles.addButton}
-        onPress={() => activeTab === 'ingredients' ? setShowIngredientModal(true) : setShowRecipeModal(true)}
+        onPress={() => {
+          if (activeTab === 'ingredients') {
+            resetIngredientForm();
+            setShowIngredientModal(true);
+            return;
+          }
+          setShowRecipeModal(true);
+        }}
       >
         <Ionicons name="add" size={24} color="#1a0f0a" />
         <Text style={styles.addButtonText}>
@@ -348,14 +395,14 @@ export const InventoryScreen: React.FC = () => {
       {activeTab === 'ingredients' ? (
         <FlatList
           data={filteredIngredients}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderIngredientItem}
           contentContainerStyle={styles.list}
         />
       ) : (
         <FlatList
           data={filteredProducts}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => entityId(item)}
           renderItem={renderProductItem}
           contentContainerStyle={styles.list}
         />
@@ -375,7 +422,11 @@ export const InventoryScreen: React.FC = () => {
       <Modal visible={showIngredientModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>➕ Nuevo Ingrediente</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.modalScrollContent}
+            >
+            <Text style={styles.modalTitle}>{editingIngredient ? '✏️ Editar Ingrediente' : '➕ Nuevo Ingrediente'}</Text>
             
             <Text style={styles.inputLabel}>Nombre</Text>
             <TextInput
@@ -430,13 +481,14 @@ export const InventoryScreen: React.FC = () => {
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowIngredientModal(false)}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { resetIngredientForm(); setShowIngredientModal(false); }}>
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddIngredient}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveIngredient}>
                 <Text style={styles.saveBtnText}>Guardar</Text>
               </TouchableOpacity>
             </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -713,6 +765,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 30,
     padding: 25,
     maxHeight: '80%',
+  },
+  modalScrollContent: {
+    paddingBottom: 10,
   },
   modalTitle: {
     fontSize: 24,
