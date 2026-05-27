@@ -35,6 +35,14 @@ export const addIngredient = createAsyncThunk(
   }
 );
 
+export const updateIngredientAsync = createAsyncThunk(
+  'inventory/updateIngredientAsync',
+  async ({ id, updates }: { id: string; updates: any }) => {
+    const response = await api.updateIngredient(id, updates);
+    return response.data;
+  }
+);
+
 export const deleteIngredient = createAsyncThunk(
   'inventory/deleteIngredient',
   async (id: string) => {
@@ -164,6 +172,13 @@ const inventorySlice = createSlice({
       // deleteIngredient
       .addCase(deleteIngredient.fulfilled, (state, action) => {
         state.ingredients = state.ingredients.filter((i: any) => i.id !== action.payload);
+      })
+      // updateIngredientAsync
+      .addCase(updateIngredientAsync.fulfilled, (state, action) => {
+        const index = state.ingredients.findIndex((i: any) => i.id === action.payload.id);
+        if (index !== -1) {
+          state.ingredients[index] = action.payload;
+        }
       })
       // restockIngredient
       .addCase(restockIngredient.fulfilled, (state, action) => {

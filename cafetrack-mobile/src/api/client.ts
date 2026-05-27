@@ -112,6 +112,13 @@ class ApiClient {
     });
   }
 
+  async updateIngredient(id: string, updates: any) {
+    return this.request(`/ingredients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+
   async restockIngredient(id: string, quantity: number, reason?: string) {
     return this.request(`/ingredients/${id}/restock`, {
       method: 'POST',
