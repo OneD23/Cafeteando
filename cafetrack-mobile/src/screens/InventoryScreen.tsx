@@ -36,6 +36,7 @@ export const InventoryScreen: React.FC = () => {
   const [showRecipeModal, setShowRecipeModal] = useState(false);
   const [showIngredientModal, setShowIngredientModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingIngredient, setEditingIngredient] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Formulario de ingrediente
@@ -87,31 +88,43 @@ export const InventoryScreen: React.FC = () => {
     );
   };
 
-  const handleAddIngredient = () => {
+  const resetIngredientForm = () => {
+    setIngName('');
+    setIngUnit('g');
+    setIngStock('');
+    setIngMinStock('');
+    setIngCost('');
+    setEditingIngredient(null);
+  };
+
+  const handleSaveIngredient = () => {
     if (!ingName || !ingStock || !ingMinStock || !ingCost) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
     }
 
-    dispatch(addIngredient({
+    const payload = {
       name: ingName,
       unit: ingUnit as any,
       stock: parseFloat(ingStock),
       minStock: parseFloat(ingMinStock),
       costPerUnit: parseFloat(ingCost),
-    }));
-    dispatch(addJournalEntry({
-      direction: 'in',
-      category: 'inventory',
-      description: `Alta ingrediente: ${ingName}`,
-      amount: parseFloat(ingStock) * parseFloat(ingCost),
-    }));
+    };
 
-    // Reset
-    setIngName('');
-    setIngStock('');
-    setIngMinStock('');
-    setIngCost('');
+    if (editingIngredient) {
+      dispatch(updateIngredient({ ...editingIngredient, ...payload, id: entityId(editingIngredient) }));
+      Alert.alert('Actualizado', `${ingName} fue actualizado correctamente.`);
+    } else {
+      dispatch(addIngredient(payload));
+      dispatch(addJournalEntry({
+        direction: 'in',
+        category: 'inventory',
+        description: `Alta ingrediente: ${ingName}`,
+        amount: parseFloat(ingStock) * parseFloat(ingCost),
+      }));
+    }
+
+    resetIngredientForm();
     setShowIngredientModal(false);
   };
 
@@ -207,20 +220,13 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
-              requestNumericInput('Ajuste', 'Nuevo stock:', (newStock) => {
-                const diff = newStock - item.stock;
-                dispatch(adjustStock({
-                  ingredientId: entityId(item),
-                  newStock,
-                  reason: 'Ajuste manual',
-                }));
-                dispatch(addJournalEntry({
-                  direction: diff >= 0 ? 'in' : 'out',
-                  category: 'adjustment',
-                  description: `Ajuste inventario: ${item.name}`,
-                  amount: Math.abs(diff) * (item.costPerUnit || 0),
-                }));
-              });
+              setEditingIngredient(item);
+              setIngName(item.name || '');
+              setIngUnit(item.unit || 'g');
+              setIngStock(String(item.stock ?? ''));
+              setIngMinStock(String(item.minStock ?? ''));
+              setIngCost(String(item.costPerUnit ?? ''));
+              setShowIngredientModal(true);
             }}
           >
             <Ionicons name="create" size={20} color="#d4a574" />
@@ -230,9 +236,16 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
+              const confirmDelete = () => dispatch(deleteIngredient(entityId(item)));
+
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                if (window.confirm(`¿Eliminar ${item.name}?`)) confirmDelete();
+                return;
+              }
+
               Alert.alert('Eliminar', `¿Eliminar ${item.name}?`, [
                 { text: 'Cancelar', style: 'cancel' },
-                { text: 'Eliminar', style: 'destructive', onPress: () => dispatch(deleteIngredient(entityId(item))) },
+                { text: 'Eliminar', style: 'destructive', onPress: confirmDelete },
               ]);
             }}
           >
@@ -363,7 +376,14 @@ export const InventoryScreen: React.FC = () => {
       {/* Add Button */}
       <TouchableOpacity 
         style={styles.addButton}
-        onPress={() => activeTab === 'ingredients' ? setShowIngredientModal(true) : setShowRecipeModal(true)}
+        onPress={() => {
+          if (activeTab === 'ingredients') {
+            resetIngredientForm();
+            setShowIngredientModal(true);
+            return;
+          }
+          setShowRecipeModal(true);
+        }}
       >
         <Ionicons name="add" size={24} color="#1a0f0a" />
         <Text style={styles.addButtonText}>
@@ -406,7 +426,7 @@ export const InventoryScreen: React.FC = () => {
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
             >
-            <Text style={styles.modalTitle}>➕ Nuevo Ingrediente</Text>
+            <Text style={styles.modalTitle}>{editingIngredient ? '✏️ Editar Ingrediente' : '➕ Nuevo Ingrediente'}</Text>
             
             <Text style={styles.inputLabel}>Nombre</Text>
             <TextInput
@@ -461,10 +481,10 @@ export const InventoryScreen: React.FC = () => {
             />
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowIngredientModal(false)}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => { resetIngredientForm(); setShowIngredientModal(false); }}>
                 <Text style={styles.cancelBtnText}>Cancelar</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleAddIngredient}>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveIngredient}>
                 <Text style={styles.saveBtnText}>Guardar</Text>
               </TouchableOpacity>
             </View>
