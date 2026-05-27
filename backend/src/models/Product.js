@@ -6,6 +6,12 @@ const productSchema = new mongoose.Schema({
     required: [true, 'El nombre es obligatorio'],
     trim: true
   },
+  sku: {
+    type: String,
+    trim: true,
+    uppercase: true,
+    sparse: true
+  },
   price: {
     type: Number,
     required: true,
@@ -58,5 +64,6 @@ const productSchema = new mongoose.Schema({
 // Índices
 productSchema.index({ category: 1, isActive: 1 });
 productSchema.index({ name: 'text' });
+productSchema.index({ sku: 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model('Product', productSchema);

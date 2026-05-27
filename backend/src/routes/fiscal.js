@@ -2,6 +2,7 @@ const express = require('express');
 const { protect, restrictTo } = require('../middleware/auth');
 const Sale = require('../models/Sale');
 const CashSessionState = require('../models/CashSessionState');
+const { logAuditEvent } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.post('/cash-session/open', protect, async (req, res) => {
     },
     { upsert: true, new: true }
   );
+  await logAuditEvent({ req, module: 'cash', action: 'cash.opened', metadata: { openingAmount } });
   res.json({ success: true, message: 'Apertura registrada', data: cashSession });
 });
 
@@ -46,6 +48,7 @@ router.post('/cash-session/close', protect, async (req, res) => {
     },
     { upsert: true, new: true }
   );
+  await logAuditEvent({ req, module: 'cash', action: 'cash.closed' });
   res.json({ success: true, message: 'Cierre registrado', data: cashSession });
 });
 
