@@ -9,6 +9,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
+const { attachRequestContext } = require('./src/middleware/requestContext');
 
 const connectDB = require('./src/config/database');
 const socketEvents = require('./src/socket/events');
@@ -96,6 +97,7 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
+app.use(attachRequestContext);
 
 // Health check
 app.get('/health', (req, res) => {

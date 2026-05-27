@@ -2,6 +2,7 @@ const express = require('express');
 const Product = require('../models/Product');
 const Recipe = require('../models/Recipe');
 const { protect } = require('../middleware/auth');
+const { logAuditEvent } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -35,7 +36,11 @@ router.post('/', protect, async (req, res) => {
   session.startTransaction();
 
   try {
-    const { name, price, category, icon, image, recipe } = req.body;
+    const { name, price, category, icon, image, recipe, sku } = req.body;
+    if (sku) {
+      const dup = await Product.findOne({ sku: String(sku).toUpperCase().trim() }).session(session);
+      if (dup) throw new Error('SKU duplicado');
+    }
 
     // Crear producto
     const product = await Product.create([{
@@ -44,6 +49,7 @@ router.post('/', protect, async (req, res) => {
       category,
       icon: icon || '☕',
       image,
+      sku,
       hasRecipe: true
     }], { session });
 
@@ -72,9 +78,11 @@ router.post('/', protect, async (req, res) => {
       success: true,
       data: populatedProduct
     });
+    await logAuditEvent({ req, module: 'products', action: 'product.created', metadata: { productId: populatedProduct._id, sku: populatedProduct.sku || null } });
 
   } catch (error) {
     await session.abortTransaction();
+    await logAuditEvent({ req, module: 'products', action: 'product.create_failed', outcome: 'failure', metadata: { error: error.message } });
     res.status(400).json({
       success: false,
       message: error.message
@@ -108,6 +116,7 @@ router.put('/:id', protect, async (req, res) => {
       success: true,
       data: product
     });
+    await logAuditEvent({ req, module: 'products', action: 'product.updated', metadata: { productId: product._id } });
   } catch (error) {
     res.status(400).json({
       success: false,
@@ -143,6 +152,7 @@ router.delete('/:id', protect, async (req, res) => {
       success: true,
       message: 'Producto eliminado'
     });
+    await logAuditEvent({ req, module: 'products', action: 'product.deleted', metadata: { productId: product._id } });
   } catch (error) {
     res.status(400).json({
       success: false,

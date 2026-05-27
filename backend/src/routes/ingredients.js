@@ -3,6 +3,7 @@ const Ingredient = require('../models/Ingredient');
 const InventoryMovement = require('../models/InventoryMovement');
 const Recipe = require('../models/Recipe');
 const { protect } = require('../middleware/auth');
+const { logAuditEvent } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -104,6 +105,7 @@ router.put('/:id', protect, async (req, res) => {
       success: true,
       data: ingredient
     });
+    await logAuditEvent({ req, module: 'inventory', action: 'inventory.adjusted', metadata: { ingredientId: ingredient._id, newStock, reason: reason || null } });
   } catch (error) {
     res.status(400).json({
       success: false,
