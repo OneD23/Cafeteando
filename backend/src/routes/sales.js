@@ -7,6 +7,7 @@ const InventoryMovement = require('../models/InventoryMovement');
 const CashSessionState = require('../models/CashSessionState');
 const { protect } = require('../middleware/auth');
 const { logAuditEvent } = require('../utils/audit');
+const AccountingEntry = require('../models/AccountingEntry');
 
 const router = express.Router();
 
@@ -150,6 +151,30 @@ router.post('/', protect, async (req, res) => {
       syncId,
       deviceId,
       offlineCreated: !!deviceId
+    }], { session });
+
+    await AccountingEntry.create([{
+      date: new Date(),
+      dayKey: new Date().toISOString().slice(0, 10),
+      direction: 'in',
+      category: 'sale',
+      description: `Venta registrada (${generatedSaleId})`,
+      amount: total,
+      reference: generatedSaleId,
+      sourceType: 'sale',
+      sourceId: sale[0]._id,
+      user: req.user._id,
+    }, {
+      date: new Date(),
+      dayKey: new Date().toISOString().slice(0, 10),
+      direction: 'out',
+      category: 'cogs',
+      description: `Costo de venta (${generatedSaleId})`,
+      amount: totalCost,
+      reference: generatedSaleId,
+      sourceType: 'sale',
+      sourceId: sale[0]._id,
+      user: req.user._id,
     }], { session });
 
     await session.commitTransaction();
