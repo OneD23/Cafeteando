@@ -104,6 +104,8 @@ export const processSale = createAsyncThunk(
       total: state.cart.totals.total,
       unsynced: true,
       localSaleId: saleId,
+      syncId: saleId,
+      idempotencyKey: saleId,
     });
     
     return { success: true, timestamp: new Date().toISOString(), saleId };
