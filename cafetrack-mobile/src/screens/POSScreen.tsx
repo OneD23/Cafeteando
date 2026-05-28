@@ -34,6 +34,8 @@ const POSScreen: React.FC = () => {
   const [cartCollapsed, setCartCollapsed] = useState(false);
   const [cashOpenModal, setCashOpenModal] = useState(false);
   const [openingAmount, setOpeningAmount] = useState("0");
+  const [countedCash, setCountedCash] = useState("0");
+  const [cashExpected, setCashExpected] = useState(0);
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const hasInventoryData = ingredients.length > 0;
@@ -44,6 +46,9 @@ const POSScreen: React.FC = () => {
       const cs = remote?.data || { isOpen: false };
       setCashSessionOpen(!!cs?.isOpen);
       if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
+      const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
+      setCashExpected(expectedCash);
+      setCountedCash(String(expectedCash));
       const rawClients = await AsyncStorage.getItem('cafetrack_clients');
       const parsedClients = rawClients ? JSON.parse(rawClients) : [];
       setClients(parsedClients.filter((c: any) => !!String(c?.name || '').trim()));
@@ -374,16 +379,19 @@ const POSScreen: React.FC = () => {
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.cartTitle}>Control de Caja</Text>
-            <TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
             {!cashSessionOpen ? (
+              <><TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
               <TouchableOpacity style={styles.checkoutButton} onPress={async () => {
                 await api.openCashSession(Number(openingAmount || 0));
+                setCashExpected(Number(openingAmount || 0));
+                setCountedCash(String(Number(openingAmount || 0)));
                 setCashSessionOpen(true);
                 setCashOpenModal(false);
               }}>
                 <Text style={styles.checkoutText}>Abrir Caja</Text>
-              </TouchableOpacity>
+              </TouchableOpacity></>
             ) : (
+              <><Text style={styles.cashExpectedText}>Efectivo esperado: ${cashExpected.toFixed(2)}</Text><TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
               <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: '#c0392b' }]} onPress={async () => {
                 const rawSales = await AsyncStorage.getItem('cafetrack_sales_history');
                 const sales = rawSales ? JSON.parse(rawSales) : [];
@@ -392,13 +400,14 @@ const POSScreen: React.FC = () => {
                 const total = salesToday.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
                 const report = { date: new Date().toISOString(), openingAmount: Number(openingAmount || 0), salesCount: salesToday.length, totalSales: total, net: total - Number(openingAmount || 0) };
                 await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-                await api.closeCashSession();
+                await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
+                setCashExpected(0);
                 setCashSessionOpen(false);
                 setCashOpenModal(false);
                 Alert.alert('Cierre de caja', `Ventas: ${salesToday.length} | Total: $${total.toFixed(2)}`);
               }}>
                 <Text style={[styles.checkoutText, { color: '#fff' }]}>Cerrar Caja y Reporte</Text>
-              </TouchableOpacity>
+              </TouchableOpacity></>
             )}
             <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setCashOpenModal(false)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
           </View>
@@ -650,6 +659,11 @@ const styles = StyleSheet.create({
   cashControlText: {
     color: '#fff',
     fontSize: 15,
+    fontWeight: '700',
+  },
+  cashExpectedText: {
+    color: '#d4a574',
+    marginTop: 12,
     fontWeight: '700',
   },
   checkoutText: {
