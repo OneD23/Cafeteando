@@ -56,7 +56,8 @@ const saleSchema = new mongoose.Schema({
   customer: {
     name: String,
     email: String,
-    phone: String
+    phone: String,
+    cedula: String
   },
   cashier: {
     type: mongoose.Schema.Types.ObjectId,
@@ -96,5 +97,10 @@ saleSchema.methods.calculateProfit = function() {
   const totalCost = this.items.reduce((sum, item) => sum + (item.cost * item.quantity), 0);
   return this.total - totalCost;
 };
+
+saleSchema.index({ createdAt: -1 });
+saleSchema.index({ saleId: 1 }, { unique: true, sparse: true });
+saleSchema.index({ 'customer.phone': 1 });
+saleSchema.index({ 'customer.cedula': 1 });
 
 module.exports = mongoose.model('Sale', saleSchema);

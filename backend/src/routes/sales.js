@@ -4,7 +4,10 @@ const Product = require('../models/Product');
 const Recipe = require('../models/Recipe');
 const Ingredient = require('../models/Ingredient');
 const InventoryMovement = require('../models/InventoryMovement');
+const CashSessionState = require('../models/CashSessionState');
 const { protect } = require('../middleware/auth');
+const { logAuditEvent } = require('../utils/audit');
+const AccountingEntry = require('../models/AccountingEntry');
 
 const router = express.Router();
 
@@ -19,6 +22,17 @@ router.post('/', protect, async (req, res) => {
 
   try {
     const { items, paymentMethod, customer, discount, deviceId, syncId } = req.body;
+    const cashState = await CashSessionState.findOne({ key: 'default' }).session(session);
+    if (!cashState?.isOpen) {
+      throw new Error('No se puede vender con la caja cerrada');
+    }
+
+    if (syncId) {
+      const existing = await Sale.findOne({ syncId }).session(session);
+      if (existing) {
+        return res.status(200).json({ success: true, data: existing, deduplicated: true });
+      }
+    }
 
     // Validar stock de ingredientes para cada item
     for (const item of items) {
@@ -139,6 +153,30 @@ router.post('/', protect, async (req, res) => {
       offlineCreated: !!deviceId
     }], { session });
 
+    await AccountingEntry.create([{
+      date: new Date(),
+      dayKey: new Date().toISOString().slice(0, 10),
+      direction: 'in',
+      category: 'sale',
+      description: `Venta registrada (${generatedSaleId})`,
+      amount: total,
+      reference: generatedSaleId,
+      sourceType: 'sale',
+      sourceId: sale[0]._id,
+      user: req.user._id,
+    }, {
+      date: new Date(),
+      dayKey: new Date().toISOString().slice(0, 10),
+      direction: 'out',
+      category: 'cogs',
+      description: `Costo de venta (${generatedSaleId})`,
+      amount: totalCost,
+      reference: generatedSaleId,
+      sourceType: 'sale',
+      sourceId: sale[0]._id,
+      user: req.user._id,
+    }], { session });
+
     await session.commitTransaction();
 
     // Emitir eventos realtime
@@ -159,8 +197,21 @@ router.post('/', protect, async (req, res) => {
       success: true,
       data: sale[0]
     });
+    await logAuditEvent({
+      req,
+      module: 'sales',
+      action: 'sale.created',
+      metadata: { saleId: sale[0].saleId, total, paymentMethod, syncId: syncId || null }
+    });
 
   } catch (error) {
+    await logAuditEvent({
+      req,
+      module: 'sales',
+      action: 'sale.create_failed',
+      outcome: 'failure',
+      metadata: { error: error.message }
+    });
     await session.abortTransaction();
     res.status(400).json({
       success: false,

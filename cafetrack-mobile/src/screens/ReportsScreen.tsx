@@ -10,8 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useDispatch, useSelector } from 'react-redux';
-import { addJournalEntry } from '../store/accountingSlice';
+import { useSelector } from 'react-redux';
 import { Ionicons } from '@expo/vector-icons';
 import api from '../api/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,10 +28,10 @@ export const ReportsScreen: React.FC = () => {
   const [openedAt, setOpenedAt] = useState<string | null>(null);
   const [dgiiResult, setDgiiResult] = useState<any>(null);
   const [invoices, setInvoices] = useState<any[]>([]);
+  const [journalRows, setJournalRows] = useState<any[]>([]);
   const { ingredients, movements } = useSelector((state: any) => state.inventory);
   const { products } = useSelector((state: any) => state.recipes);
   const { entries } = useSelector((state: any) => state.accounting);
-  const dispatch = useDispatch();
 
 
   const getStartDate = (selected: 'day' | 'week' | 'month') => {
@@ -143,8 +142,7 @@ export const ReportsScreen: React.FC = () => {
   ];
 
   const recentMovements = filteredMovements.slice(-10).reverse();
-  const recentJournal = [...filteredEntries].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 10);
-  const latestSaleEntry = filteredEntries.find((e: any) => e.category === 'sale');
+  const recentJournal = journalRows.slice(0, 10);
 
   React.useEffect(() => {
     const loadCashState = async () => {
@@ -190,13 +188,15 @@ export const ReportsScreen: React.FC = () => {
   };
 
   React.useEffect(() => {
-    const loadInvoices = async () => {
-      const raw = await AsyncStorage.getItem('cafetrack_sales_history');
-      const rows = raw ? JSON.parse(raw) : [];
-      setInvoices(rows);
-    };
-    if (accountingTab === 'factura') loadInvoices();
-  }, [accountingTab, entries.length]);
+    const start = periodStart.toISOString();
+    const end = new Date().toISOString();
+    api.getInvoices({ startDate: start, endDate: end, limit: '50' })
+      .then((res: any) => setInvoices(res?.data || []))
+      .catch(() => setInvoices([]));
+    api.getAccountingEntries({ startDate: start, endDate: end, limit: '100' })
+      .then((res: any) => setJournalRows(res?.data || []))
+      .catch(() => setJournalRows([]));
+  }, [periodStart]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -402,13 +402,17 @@ export const ReportsScreen: React.FC = () => {
               if (!name) return Alert.alert('Dato requerido', 'Ingresa una descripción del gasto.');
               if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Monto inválido', 'Ingresa un monto mayor a 0.');
 
-              dispatch(addJournalEntry({
+              api.createAccountingEntry({
                 direction: 'out',
-                category: 'other',
+                category: 'expense',
                 description: `Gasto operativo: ${name}`,
                 amount,
                 reference: 'manual-expense',
-              }));
+              }).then(() => {
+                api.getAccountingEntries({ startDate: periodStart.toISOString(), endDate: new Date().toISOString(), limit: '100' })
+                  .then((res: any) => setJournalRows(res?.data || []))
+                  .catch(() => {});
+              });
 
               setExpenseName('');
               setExpenseAmount('');
@@ -435,8 +439,8 @@ export const ReportsScreen: React.FC = () => {
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Ingresos:</Text><Text style={[styles.movementQty,{color:'#27ae60'}]}>${totalEntries.toFixed(2)}</Text></View>
           <View style={styles.aperturaRow}><Text style={styles.movementTitle}>Impuestos estimados:</Text><Text style={styles.movementTitle}>${(totalEntries*0.16).toFixed(2)}</Text></View>
           <TouchableOpacity style={styles.actionBtn} onPress={async () => {
-            if (!latestSaleEntry?.meta?.saleId) return Alert.alert('Sin venta', 'No hay venta con saleId para facturar.');
-            const generated = await api.generateDgiiEcf({ saleId: latestSaleEntry.meta.saleId, ncfType: 'B02' });
+            if (!invoices?.[0]?.id) return Alert.alert('Sin venta', 'No hay venta reciente para facturar.');
+            const generated = await api.generateDgiiEcf({ saleId: invoices[0].id, ncfType: 'B02' });
             const sent = await api.sendDgiiEcf(generated.data);
             setDgiiResult(sent.data);
             Alert.alert('DGII', 'e-CF generado y enviado en modo integración inicial');

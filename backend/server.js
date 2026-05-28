@@ -9,6 +9,7 @@ const compression = require('compression');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const mongoose = require('mongoose');
+const { attachRequestContext } = require('./src/middleware/requestContext');
 
 const connectDB = require('./src/config/database');
 const socketEvents = require('./src/socket/events');
@@ -20,6 +21,7 @@ const productRoutes = require('./src/routes/products');
 const saleRoutes = require('./src/routes/sales');
 const clientRoutes = require('./src/routes/clients');
 const fiscalRoutes = require('./src/routes/fiscal');
+const accountingRoutes = require('./src/routes/accounting');
 
 // Conectar a MongoDB
 connectDB();
@@ -96,6 +98,7 @@ app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
+app.use(attachRequestContext);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -113,6 +116,7 @@ app.use('/api/products', productRoutes);
 app.use('/api/sales', saleRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/fiscal', fiscalRoutes);
+app.use('/api/accounting', accountingRoutes);
 
 // Socket.io events
 socketEvents(io);

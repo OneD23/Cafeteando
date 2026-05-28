@@ -2,6 +2,7 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { protect, restrictTo } = require('../middleware/auth');
+const { logAuditEvent } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -33,6 +34,13 @@ router.post('/login', async (req, res) => {
     }).select('+password');
 
     if (!user || !(await user.comparePassword(password))) {
+      await logAuditEvent({
+        req,
+        module: 'auth',
+        action: 'login.failed',
+        outcome: 'failure',
+        metadata: { username }
+      });
       return res.status(401).json({
         success: false,
         message: 'Credenciales inválidas'
@@ -63,6 +71,12 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role
       }
+    });
+    await logAuditEvent({
+      req,
+      module: 'auth',
+      action: 'login.success',
+      metadata: { userId: user._id, username: user.username }
     });
 
   } catch (error) {

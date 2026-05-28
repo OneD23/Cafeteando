@@ -5,6 +5,7 @@ import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../store/authSlice";
 import { setTaxEnabled } from "../store/cartSlice";
 import { api } from "../api/client";
+import { pendingQueue, syncPendingData } from "../services/localDb";
 
 
 const SettingsScreen: React.FC = () => {
@@ -15,6 +16,16 @@ const SettingsScreen: React.FC = () => {
   const [mode, setMode] = useState<"bootstrap" | "register">("register");
   const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "cashier" as "admin" | "manager" | "cashier" });
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
+  const refreshPendingSync = async () => {
+    const pending = await pendingQueue();
+    setPendingSyncCount(pending.length);
+  };
+
+  React.useEffect(() => {
+    refreshPendingSync();
+  }, []);
 
 
   const handleCreateUser = async () => {
@@ -50,7 +61,20 @@ const SettingsScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={() => dispatch(logout())}><Text style={styles.logoutText}>Cerrar Sesión</Text></TouchableOpacity>
+      <View style={styles.optionCard}>
+        <View>
+          <Text style={styles.optionTitle}>Sincronización offline</Text>
+          <Text style={styles.optionSubtitle}>Pendientes: {pendingSyncCount}</Text>
+        </View>
+        <TouchableOpacity style={styles.usersButton} onPress={async () => { await syncPendingData(); await refreshPendingSync(); }}>
+          <Text style={styles.usersButtonText}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+
+      <TouchableOpacity style={styles.logoutButton} onPress={() => {
+        if (pendingSyncCount > 0) return Alert.alert("Sincronización pendiente", "Tienes datos sin sincronizar. Reintenta sincronizar antes de cerrar sesión.");
+        dispatch(logout());
+      }}><Text style={styles.logoutText}>Cerrar Sesión</Text></TouchableOpacity>
 
       <TouchableOpacity style={styles.usersButton} onPress={() => {
         if (user?.role !== "admin") return Alert.alert("Acceso denegado", "Solo administradores pueden gestionar usuarios.");

@@ -208,6 +208,35 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
       body: JSON.stringify({ ecf }),
     });
   }
+
+  async getAccountingEntries(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/entries${queryString}`);
+  }
+
+  async createAccountingEntry(payload: {
+    direction: 'in' | 'out';
+    category: 'sale' | 'cogs' | 'expense' | 'adjustment' | 'other';
+    description: string;
+    amount: number;
+    date?: string;
+    reference?: string;
+  }) {
+    return this.request('/accounting/entries', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getDailyJournal(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/daily-journal${queryString}`);
+  }
+
+  async getInvoices(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/invoices${queryString}`);
+  }
 }
 
 export const api = new ApiClient(API_URL);
