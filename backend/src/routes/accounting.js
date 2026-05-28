@@ -33,6 +33,49 @@ const getOpenCashRegister = async (userId, session = null) => {
   return session ? query.session(session) : query;
 };
 
+const recoverOpenCashRegisterFromLegacyState = async (userId, session = null) => {
+  const legacyQuery = CashSessionState.findOne({ key: 'default', isOpen: true });
+  const legacyCashState = session ? await legacyQuery.session(session) : await legacyQuery;
+  if (!legacyCashState) return null;
+
+  const existingQuery = CashRegister.findOne({ user: userId, branchId: 'default', status: 'open' });
+  const existingRecovered = session ? await existingQuery.session(session) : await existingQuery;
+  if (existingRecovered) return existingRecovered;
+
+  const now = legacyCashState.openedAt || new Date();
+  const fechaContable = toAccountingDate(now);
+  const openingAmount = roundMoney(legacyCashState.openingAmount || 0);
+  const cashRows = await CashRegister.create([{
+    user: userId,
+    openedAt: now,
+    openedFechaContable: fechaContable,
+    openingAmount,
+  }], session ? { session } : undefined);
+  const cash = cashRows[0];
+
+  await CashMovement.create([{
+    cashRegister: cash._id,
+    user: userId,
+    cajero: userId,
+    fecha: now,
+    fechaContable,
+    type: 'apertura',
+    amount: openingAmount,
+    paymentMethod: 'cash',
+    reference: `LEGACY-OPEN-${cash._id}`,
+    description: 'Apertura recuperada desde caja fiscal legacy',
+    sourceType: 'cash',
+    sourceId: cash._id,
+  }], session ? { session } : undefined);
+
+  await AccountingEntry.create([
+    { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Efectivo inicial recuperado desde caja legacy', amount: openingAmount, debit: openingAmount, credit: 0, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash._id}`, sourceType: 'cash', sourceId: cash._id, cashRegister: cash._id, user: userId },
+    { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'other', description: 'Contrapartida apertura recuperada desde caja legacy', amount: openingAmount, debit: 0, credit: openingAmount, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash._id}`, sourceType: 'cash', sourceId: cash._id, cashRegister: cash._id, user: userId },
+  ], session ? { session } : undefined);
+
+  return cash;
+};
+
 const buildCashSummary = async (cashRegisterId, session = null) => {
   const cashRegisterObjectId = objectIdOrNull(String(cashRegisterId));
   const match = { cashRegister: cashRegisterObjectId, status: 'activo' };
@@ -88,7 +131,7 @@ router.get('/dashboard', protect, async (req, res) => {
       Invoice.countDocuments({ fechaContable, status: 'emitida' }),
       Invoice.aggregate([{ $match: { fechaContable, status: 'emitida' } }, { $group: { _id: '$paymentMethod', total: { $sum: '$total' }, count: { $sum: 1 } } }]),
       Sale.aggregate([{ $match: { createdAt: dateRange, status: { $ne: 'cancelled' } } }, { $unwind: '$items' }, { $group: { _id: null, productsSold: { $sum: '$items.quantity' } } }]),
-      getOpenCashRegister(req.user._id),
+      getOpenCashRegister(req.user._id).then((cash) => cash || recoverOpenCashRegisterFromLegacyState(req.user._id)),
     ]);
 
     const sales = salesAgg[0] || { total: 0, count: 0, averageTicket: 0 };
@@ -419,7 +462,7 @@ router.post('/cash/close', protect, async (req, res) => {
 
 router.get('/cash/current', protect, async (req, res) => {
   try {
-    const cash = await getOpenCashRegister(req.user._id);
+    const cash = await getOpenCashRegister(req.user._id) || await recoverOpenCashRegisterFromLegacyState(req.user._id);
     const summary = cash ? await buildCashSummary(cash._id) : null;
     res.json({ success: true, data: cash ? { ...cash.toObject(), summary } : null });
   } catch (error) {

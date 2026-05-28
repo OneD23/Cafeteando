@@ -18,6 +18,46 @@ const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100)
 const toAccountingDate = (value = new Date()) => new Date(value).toISOString().slice(0, 10);
 const normalizePaymentMethod = (method) => ['cash', 'card', 'transfer', 'mixed'].includes(String(method || '').toLowerCase()) ? String(method).toLowerCase() : 'cash';
 
+const recoverAccountingCashFromLegacyState = async (userId, session) => {
+  const legacyCashState = await CashSessionState.findOne({ key: 'default', isOpen: true }).session(session);
+  if (!legacyCashState) return null;
+
+  const existingRecovered = await CashRegister.findOne({ user: userId, branchId: 'default', status: 'open' }).session(session);
+  if (existingRecovered) return existingRecovered;
+
+  const now = legacyCashState.openedAt || new Date();
+  const fechaContable = toAccountingDate(now);
+  const openingAmount = roundMoney(legacyCashState.openingAmount || 0);
+  const cash = await CashRegister.create([{
+    user: userId,
+    openedAt: now,
+    openedFechaContable: fechaContable,
+    openingAmount,
+  }], { session });
+
+  await CashMovement.create([{
+    cashRegister: cash[0]._id,
+    user: userId,
+    cajero: userId,
+    fecha: now,
+    fechaContable,
+    type: 'apertura',
+    amount: openingAmount,
+    paymentMethod: 'cash',
+    reference: `LEGACY-OPEN-${cash[0]._id}`,
+    description: 'Apertura recuperada desde caja fiscal legacy',
+    sourceType: 'cash',
+    sourceId: cash[0]._id,
+  }], { session });
+
+  await AccountingEntry.create([
+    { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Efectivo inicial recuperado desde caja legacy', amount: openingAmount, debit: openingAmount, credit: 0, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: userId },
+    { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'other', description: 'Contrapartida apertura recuperada desde caja legacy', amount: openingAmount, debit: 0, credit: openingAmount, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: userId },
+  ], { session });
+
+  return cash[0];
+};
+
 // @route   POST /api/sales
 // @desc    Crear venta y descontar inventario
 // @access  Private
@@ -31,9 +71,12 @@ router.post('/', protect, async (req, res) => {
       throw new Error('La venta requiere al menos un producto');
     }
     const requestKey = idempotencyKey || syncId;
-    const cashRegister = await CashRegister.findOne({ user: req.user._id, branchId: 'default', status: 'open' }).session(session);
+    let cashRegister = await CashRegister.findOne({ user: req.user._id, branchId: 'default', status: 'open' }).session(session);
     if (!cashRegister) {
-      throw new Error('No se puede vender sin una caja abierta');
+      cashRegister = await recoverAccountingCashFromLegacyState(req.user._id, session);
+    }
+    if (!cashRegister) {
+      throw new Error('No se puede vender sin una caja abierta. Abre la caja en POS o Contabilidad antes de cobrar.');
     }
 
     if (requestKey) {
