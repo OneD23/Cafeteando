@@ -273,7 +273,16 @@ router.post('/invoices/:id/void', protect, restrictTo('admin', 'manager'), async
     await invoice.save({ session });
     await Sale.findByIdAndUpdate(invoice.sale, { status: 'cancelled' }, { session });
     await CashMovement.create([{ cashRegister: invoice.cashRegister, user: req.user._id, cajero: invoice.cashier, fecha: new Date(), fechaContable: toAccountingDate(), type: 'anulación', amount: invoice.total, paymentMethod: invoice.paymentMethod, reference: invoice.invoiceNumber, description: `Anulación factura ${invoice.invoiceNumber}: ${reason}`, sourceType: 'invoice', sourceId: invoice._id }], { session });
-    await AccountingEntry.create([{ date: new Date(), fecha: new Date(), dayKey: toAccountingDate(), fechaContable: toAccountingDate(), direction: 'out', type: 'anulación', category: 'void', description: `Anulación factura ${invoice.invoiceNumber}`, amount: invoice.total, debit: invoice.total, credit: 0, paymentMethod: invoice.paymentMethod, reference: invoice.invoiceNumber, sourceType: 'invoice', sourceId: invoice._id, cashRegister: invoice.cashRegister, user: req.user._id }], { session });
+    const voidDate = new Date();
+    const voidFechaContable = toAccountingDate(voidDate);
+    const voidRows = [
+      { date: voidDate, fecha: voidDate, dayKey: voidFechaContable, fechaContable: voidFechaContable, direction: 'out', type: 'anulación', category: 'sale', description: `Reverso ingreso factura ${invoice.invoiceNumber}`, amount: invoice.subtotal, debit: invoice.subtotal, credit: 0, paymentMethod: invoice.paymentMethod, reference: invoice.invoiceNumber, sourceType: 'invoice', sourceId: invoice._id, cashRegister: invoice.cashRegister, user: req.user._id },
+      { date: voidDate, fecha: voidDate, dayKey: voidFechaContable, fechaContable: voidFechaContable, direction: 'out', type: 'anulación', category: 'payment', description: `Reverso cobro factura ${invoice.invoiceNumber}`, amount: invoice.total, debit: 0, credit: invoice.total, paymentMethod: invoice.paymentMethod, reference: invoice.invoiceNumber, sourceType: 'invoice', sourceId: invoice._id, cashRegister: invoice.cashRegister, user: req.user._id },
+    ];
+    if (invoice.itbis > 0) {
+      voidRows.push({ date: voidDate, fecha: voidDate, dayKey: voidFechaContable, fechaContable: voidFechaContable, direction: 'out', type: 'anulación', category: 'tax', description: `Reverso ITBIS factura ${invoice.invoiceNumber}`, amount: invoice.itbis, debit: invoice.itbis, credit: 0, paymentMethod: invoice.paymentMethod, reference: invoice.invoiceNumber, sourceType: 'invoice', sourceId: invoice._id, cashRegister: invoice.cashRegister, user: req.user._id });
+    }
+    await AccountingEntry.create(voidRows, { session });
     await session.commitTransaction();
     await logAuditEvent({ req, module: 'accounting', action: 'invoice.voided', metadata: { invoiceNumber: invoice.invoiceNumber, reason } });
     res.json({ success: true, data: invoice });
@@ -316,7 +325,10 @@ router.post('/expenses', protect, async (req, res) => {
     if (normalizePaymentMethod(paymentMethod) === 'cash' && !cashRegister) throw Object.assign(new Error('No se puede registrar gasto en efectivo sin caja abierta'), { statusCode: 400 });
     const expense = await Expense.create([{ user: req.user._id, cashRegister: cashRegister?._id, fecha: dt, fechaContable, description: description.trim(), category, amount: cleanAmount, paymentMethod: normalizePaymentMethod(paymentMethod), provider, receiptNumber, comprobanteUrl, reference: `EXP-${Date.now()}` }], { session });
     await CashMovement.create([{ cashRegister: cashRegister?._id, user: req.user._id, cajero: req.user._id, fecha: dt, fechaContable, type: 'gasto', amount: cleanAmount, paymentMethod: normalizePaymentMethod(paymentMethod), reference: expense[0].reference, description: `Gasto: ${description.trim()}`, sourceType: 'expense', sourceId: expense[0]._id }], { session });
-    await AccountingEntry.create([{ date: dt, fecha: dt, dayKey: fechaContable, fechaContable, direction: 'out', type: 'gasto', category: 'expense', description: `Gasto ${category}: ${description.trim()}`, amount: cleanAmount, debit: cleanAmount, credit: 0, paymentMethod: normalizePaymentMethod(paymentMethod), reference: expense[0].reference, sourceType: 'expense', sourceId: expense[0]._id, cashRegister: cashRegister?._id, user: req.user._id }], { session });
+    await AccountingEntry.create([
+      { date: dt, fecha: dt, dayKey: fechaContable, fechaContable, direction: 'out', type: 'gasto', category: 'expense', description: `Gasto ${category}: ${description.trim()}`, amount: cleanAmount, debit: cleanAmount, credit: 0, paymentMethod: normalizePaymentMethod(paymentMethod), reference: expense[0].reference, sourceType: 'expense', sourceId: expense[0]._id, cashRegister: cashRegister?._id, user: req.user._id },
+      { date: dt, fecha: dt, dayKey: fechaContable, fechaContable, direction: 'out', type: 'gasto', category: 'payment', description: `Pago gasto ${category}: ${description.trim()}`, amount: cleanAmount, debit: 0, credit: cleanAmount, paymentMethod: normalizePaymentMethod(paymentMethod), reference: expense[0].reference, sourceType: 'expense', sourceId: expense[0]._id, cashRegister: cashRegister?._id, user: req.user._id },
+    ], { session });
     await session.commitTransaction();
     res.status(201).json({ success: true, data: expense[0] });
   } catch (error) {
@@ -339,7 +351,10 @@ router.post('/cash/open', protect, async (req, res) => {
     const fechaContable = toAccountingDate(now);
     const cash = await CashRegister.create([{ user: req.user._id, openedAt: now, openedFechaContable: fechaContable, openingAmount: roundMoney(openingAmount) }], { session });
     await CashMovement.create([{ cashRegister: cash[0]._id, user: req.user._id, cajero: req.user._id, fecha: now, fechaContable, type: 'apertura', amount: roundMoney(openingAmount), paymentMethod: 'cash', reference: `OPEN-${cash[0]._id}`, description: 'Apertura de caja', sourceType: 'cash', sourceId: cash[0]._id }], { session });
-    await AccountingEntry.create([{ date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Apertura de caja', amount: roundMoney(openingAmount), debit: 0, credit: roundMoney(openingAmount), paymentMethod: 'cash', reference: `OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: req.user._id }], { session });
+    await AccountingEntry.create([
+      { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Efectivo inicial en caja', amount: roundMoney(openingAmount), debit: roundMoney(openingAmount), credit: 0, paymentMethod: 'cash', reference: `OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: req.user._id },
+      { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'other', description: 'Contrapartida apertura de caja', amount: roundMoney(openingAmount), debit: 0, credit: roundMoney(openingAmount), paymentMethod: 'cash', reference: `OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: req.user._id },
+    ], { session });
     await CashSessionState.findOneAndUpdate({ key: 'default' }, { $set: { isOpen: true, openedAt: now, openedBy: req.user._id, openingAmount: roundMoney(openingAmount) } }, { upsert: true, new: true, session });
     await session.commitTransaction();
     res.status(201).json({ success: true, message: 'Caja abierta', data: cash[0] });
@@ -387,7 +402,10 @@ router.post('/cash/close', protect, async (req, res) => {
       })), { session });
     }
     await CashMovement.create([{ cashRegister: cash._id, user: req.user._id, cajero: cash.user, fecha: now, fechaContable, type: 'cierre', amount: roundMoney(countedCash), paymentMethod: 'cash', reference: `CLOSE-${closing[0]._id}`, description: 'Cierre de caja', sourceType: 'closing', sourceId: closing[0]._id }], { session });
-    await AccountingEntry.create([{ date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'out', type: 'cierre', category: 'cash', description: 'Cierre de caja', amount: roundMoney(countedCash), debit: roundMoney(countedCash), credit: 0, paymentMethod: 'cash', reference: `CLOSE-${closing[0]._id}`, sourceType: 'closing', sourceId: closing[0]._id, cashRegister: cash._id, user: req.user._id }], { session });
+    await AccountingEntry.create([
+      { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'out', type: 'cierre', category: 'cash', description: 'Retiro/control de efectivo por cierre', amount: roundMoney(countedCash), debit: 0, credit: roundMoney(countedCash), paymentMethod: 'cash', reference: `CLOSE-${closing[0]._id}`, sourceType: 'closing', sourceId: closing[0]._id, cashRegister: cash._id, user: req.user._id },
+      { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'out', type: 'cierre', category: 'other', description: 'Contrapartida cierre de caja', amount: roundMoney(countedCash), debit: roundMoney(countedCash), credit: 0, paymentMethod: 'cash', reference: `CLOSE-${closing[0]._id}`, sourceType: 'closing', sourceId: closing[0]._id, cashRegister: cash._id, user: req.user._id },
+    ], { session });
     await CashSessionState.findOneAndUpdate({ key: 'default' }, { $set: { isOpen: false, openedAt: null, openedBy: null, openingAmount: 0 } }, { upsert: true, new: true, session });
     await session.commitTransaction();
     res.json({ success: true, message: 'Caja cerrada', data: { cashRegister: cash, closing: closing[0] } });

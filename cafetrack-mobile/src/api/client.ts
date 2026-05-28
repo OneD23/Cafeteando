@@ -179,19 +179,26 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
   }
 
   async getCashSession() {
-    return this.request('/fiscal/cash-session');
+    const response = await this.request('/accounting/cash/current');
+    return {
+      ...response,
+      data: response?.data
+        ? { ...response.data, isOpen: true }
+        : { isOpen: false, openedAt: null, openingAmount: 0 },
+    };
   }
 
   async openCashSession(openingAmount: number) {
-    return this.request('/fiscal/cash-session/open', {
+    return this.request('/accounting/cash/open', {
       method: 'POST',
       body: JSON.stringify({ openingAmount }),
     });
   }
 
-  async closeCashSession() {
-    return this.request('/fiscal/cash-session/close', {
+  async closeCashSession(countedCash = 0, observations = '') {
+    return this.request('/accounting/cash/close', {
       method: 'POST',
+      body: JSON.stringify({ countedCash, observations }),
     });
   }
 

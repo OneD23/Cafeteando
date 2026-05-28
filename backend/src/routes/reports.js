@@ -9,6 +9,7 @@ const { protect } = require('../middleware/auth');
 const { roundMoney, toAccountingDate, dateRangeFromQuery, buildPrintableHtml } = require('../utils/accounting');
 
 const router = express.Router();
+const asyncHandler = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
 
 const userDisplayName = (user) => user?.name || user?.username || 'Sistema';
 
@@ -78,55 +79,55 @@ const persistSnapshot = async (type, report, user) => ReportSnapshot.create({
   generatedBy: user?._id,
 });
 
-router.get('/daily', protect, async (req, res) => {
+router.get('/daily', protect, asyncHandler(async (req, res) => {
   const report = await buildGeneralReport('daily', req.query);
   await persistSnapshot('daily', report, req.user);
   res.json({ success: true, data: report });
-});
+}));
 
-router.get('/weekly', protect, async (req, res) => {
+router.get('/weekly', protect, asyncHandler(async (req, res) => {
   const report = await buildGeneralReport('weekly', req.query);
   await persistSnapshot('weekly', report, req.user);
   res.json({ success: true, data: report });
-});
+}));
 
-router.get('/monthly', protect, async (req, res) => {
+router.get('/monthly', protect, asyncHandler(async (req, res) => {
   const report = await buildGeneralReport('monthly', req.query);
   await persistSnapshot('monthly', report, req.user);
   res.json({ success: true, data: report });
-});
+}));
 
-router.get('/range', protect, async (req, res) => {
+router.get('/range', protect, asyncHandler(async (req, res) => {
   const report = await buildGeneralReport('range', req.query);
   await persistSnapshot('range', report, req.user);
   res.json({ success: true, data: report });
-});
+}));
 
-router.get('/expenses', protect, async (req, res) => {
+router.get('/expenses', protect, asyncHandler(async (req, res) => {
   const range = periodRange('range', req.query);
   const rows = await Expense.find({ fecha: range, status: 'activo' }).populate('user', 'name username').sort({ fecha: -1 });
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   res.json({ success: true, data: { rows, summary: { total: roundMoney(total), count: rows.length } } });
-});
+}));
 
-router.get('/products', protect, async (req, res) => {
+router.get('/products', protect, asyncHandler(async (req, res) => {
   const range = periodRange('range', req.query);
   const rows = await Sale.aggregate([{ $match: salesMatch(range) }, { $unwind: '$items' }, { $group: { _id: '$items.product', quantity: { $sum: '$items.quantity' }, revenue: { $sum: '$items.total' }, cost: { $sum: { $multiply: ['$items.cost', '$items.quantity'] } } } }, { $lookup: { from: 'products', localField: '_id', foreignField: '_id', as: 'product' } }, { $project: { product: { $first: '$product.name' }, quantity: 1, revenue: 1, cost: 1, profit: { $subtract: ['$revenue', '$cost'] } } }, { $sort: { quantity: -1 } }]);
   res.json({ success: true, data: { rows, summary: { products: rows.length, quantity: rows.reduce((s, r) => s + r.quantity, 0), revenue: roundMoney(rows.reduce((s, r) => s + r.revenue, 0)) } } });
-});
+}));
 
-router.get('/inventory', protect, async (req, res) => {
+router.get('/inventory', protect, asyncHandler(async (req, res) => {
   const rows = await Ingredient.find({ isActive: true }).sort({ name: 1 });
   const lowStock = rows.filter((row) => Number(row.stock || 0) <= Number(row.minStock || 0));
   res.json({ success: true, data: { rows, summary: { totalItems: rows.length, lowStock: lowStock.length } } });
-});
+}));
 
-router.get('/cash', protect, async (req, res) => {
+router.get('/cash', protect, asyncHandler(async (req, res) => {
   const range = periodRange('range', req.query);
   const rows = await CashMovement.find({ fecha: range }).populate('user', 'name username').sort({ fecha: -1 });
   const totalsByType = await CashMovement.aggregate([{ $match: { fecha: range } }, { $group: { _id: '$type', total: { $sum: '$amount' }, count: { $sum: 1 } } }]);
   res.json({ success: true, data: { rows, totalsByType } });
-});
+}));
 
 router.get('/:type/pdf', protect, async (req, res) => {
   try {

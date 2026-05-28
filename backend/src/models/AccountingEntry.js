@@ -33,8 +33,8 @@ const accountingEntrySchema = new mongoose.Schema({
 accountingEntrySchema.pre('validate', function(next) {
   this.fecha = this.fecha || this.date;
   this.fechaContable = this.fechaContable || this.dayKey;
-  this.debit = this.debit || (this.direction === 'out' ? this.amount : 0);
-  this.credit = this.credit || (this.direction === 'in' ? this.amount : 0);
+  this.debit = this.debit ?? (this.direction === 'out' ? this.amount : 0);
+  this.credit = this.credit ?? (this.direction === 'in' ? this.amount : 0);
   next();
 });
 

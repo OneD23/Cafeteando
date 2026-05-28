@@ -14,7 +14,7 @@ const cashMovementSchema = new mongoose.Schema({
   reference: { type: String, trim: true, index: true },
   description: { type: String, trim: true, required: true },
   status: { type: String, enum: ['activo', 'anulado'], default: 'activo', index: true },
-  sourceType: { type: String, enum: ['sale', 'invoice', 'expense', 'cash', 'manual'], default: 'manual' },
+  sourceType: { type: String, enum: ['sale', 'invoice', 'expense', 'cash', 'closing', 'manual'], default: 'manual' },
   sourceId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
 }, { timestamps: true });
 
