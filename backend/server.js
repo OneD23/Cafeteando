@@ -22,6 +22,7 @@ const saleRoutes = require('./src/routes/sales');
 const clientRoutes = require('./src/routes/clients');
 const fiscalRoutes = require('./src/routes/fiscal');
 const accountingRoutes = require('./src/routes/accounting');
+const reportRoutes = require('./src/routes/reports');
 
 // Conectar a MongoDB
 connectDB();
@@ -117,6 +118,9 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/fiscal', fiscalRoutes);
 app.use('/api/accounting', accountingRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/v1/accounting', accountingRoutes);
+app.use('/api/v1/reports', reportRoutes);
 
 // Socket.io events
 socketEvents(io);

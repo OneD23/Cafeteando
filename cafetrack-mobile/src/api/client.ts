@@ -237,6 +237,63 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
     const queryString = params ? `?${new URLSearchParams(params)}` : '';
     return this.request(`/accounting/invoices${queryString}`);
   }
+  async getAccountingDashboard(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/dashboard${queryString}`);
+  }
+
+  async getAccountingJournal(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/journal${queryString}`);
+  }
+
+  async getCashMovements(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/movements${queryString}`);
+  }
+
+  async createExpense(payload: any) {
+    return this.request('/accounting/expenses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async openAccountingCash(openingAmount: number) {
+    return this.request('/accounting/cash/open', {
+      method: 'POST',
+      body: JSON.stringify({ openingAmount }),
+    });
+  }
+
+  async closeAccountingCash(payload: { countedCash: number; observations?: string }) {
+    return this.request('/accounting/cash/close', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async getCurrentCash() {
+    return this.request('/accounting/cash/current');
+  }
+
+  async getCashClosings(params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/accounting/cash/closings${queryString}`);
+  }
+
+  async voidInvoice(id: string, reason: string) {
+    return this.request(`/accounting/invoices/${id}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  }
+
+  async getReport(type: 'daily' | 'weekly' | 'monthly' | 'range' | 'expenses' | 'products' | 'inventory' | 'cash', params?: any) {
+    const queryString = params ? `?${new URLSearchParams(params)}` : '';
+    return this.request(`/reports/${type}${queryString}`);
+  }
+
 }
 
 export const api = new ApiClient(API_URL);
