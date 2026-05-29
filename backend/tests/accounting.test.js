@@ -76,3 +76,22 @@ test('accounting entries preserve explicit zero debit/credit for balanced journa
   assert.equal(rows[4].debit, 0);
   assert.equal(rows[0].credit, 0);
 });
+
+test('transactional array creates include ordered true for Mongoose sessions', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const routeFiles = [
+    '../src/routes/accounting.js',
+    '../src/routes/sales.js',
+    '../src/routes/products.js',
+    '../src/routes/ingredients.js',
+  ];
+
+  for (const routeFile of routeFiles) {
+    const absolutePath = path.join(__dirname, routeFile);
+    const source = fs.readFileSync(absolutePath, 'utf8');
+    const createCalls = source.match(/\.create\([\s\S]*?\);/g) || [];
+    const unsafe = createCalls.filter((call) => call.includes('session') && !call.includes('ordered: true'));
+    assert.deepEqual(unsafe, [], `${routeFile} tiene create() con session sin ordered: true`);
+  }
+});

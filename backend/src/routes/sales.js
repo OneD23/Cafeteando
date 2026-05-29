@@ -33,7 +33,7 @@ const recoverAccountingCashFromLegacyState = async (userId, session) => {
     openedAt: now,
     openedFechaContable: fechaContable,
     openingAmount,
-  }], { session });
+  }], { session, ordered: true });
 
   await CashMovement.create([{
     cashRegister: cash[0]._id,
@@ -48,12 +48,12 @@ const recoverAccountingCashFromLegacyState = async (userId, session) => {
     description: 'Apertura recuperada desde caja fiscal legacy',
     sourceType: 'cash',
     sourceId: cash[0]._id,
-  }], { session });
+  }], { session, ordered: true });
 
   await AccountingEntry.create([
     { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Efectivo inicial recuperado desde caja legacy', amount: openingAmount, debit: openingAmount, credit: 0, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: userId },
     { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'other', description: 'Contrapartida apertura recuperada desde caja legacy', amount: openingAmount, debit: 0, credit: openingAmount, paymentMethod: 'cash', reference: `LEGACY-OPEN-${cash[0]._id}`, sourceType: 'cash', sourceId: cash[0]._id, cashRegister: cash[0]._id, user: userId },
-  ], { session });
+  ], { session, ordered: true });
 
   return cash[0];
 };
@@ -160,7 +160,7 @@ router.post('/', protect, async (req, res) => {
             reason: `Venta: ${product.name}`,
             user: req.user._id,
             deviceId
-          }], { session });
+          }], { session, ordered: true });
         }
       }
 
@@ -207,7 +207,7 @@ router.post('/', protect, async (req, res) => {
       idempotencyKey: requestKey,
       deviceId,
       offlineCreated: !!deviceId
-    }], { session });
+    }], { session, ordered: true });
 
     const invoiceNumber = generatedSaleId.replace('SALE-', 'FAC-');
     const fechaContable = toAccountingDate(now);
@@ -239,7 +239,7 @@ router.post('/', protect, async (req, res) => {
       paymentMethod: normalizePaymentMethod(paymentMethod),
       reference: generatedSaleId,
       status: 'emitida',
-    }], { session });
+    }], { session, ordered: true });
 
     sale[0].invoice = invoice[0]._id;
     await sale[0].save({ session });
@@ -257,7 +257,7 @@ router.post('/', protect, async (req, res) => {
       description: `Venta ${generatedSaleId}`,
       sourceType: 'sale',
       sourceId: sale[0]._id,
-    }], { session });
+    }], { session, ordered: true });
 
     const accountingRows = [{
       date: now,
@@ -357,7 +357,7 @@ router.post('/', protect, async (req, res) => {
       });
     }
 
-    await AccountingEntry.create(accountingRows, { session });
+    await AccountingEntry.create(accountingRows, { session, ordered: true });
 
     await session.commitTransaction();
 

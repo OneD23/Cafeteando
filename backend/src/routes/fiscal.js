@@ -92,7 +92,7 @@ router.post('/cash-session/open', protect, async (req, res) => {
     await AccountingEntry.create([
       { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'cash', description: 'Efectivo inicial en caja', amount: cleanOpeningAmount, debit: cleanOpeningAmount, credit: 0, paymentMethod: 'cash', reference: `FISCAL-OPEN-${cashRegister._id}`, sourceType: 'cash', sourceId: cashRegister._id, cashRegister: cashRegister._id, user: req.user._id },
       { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'in', type: 'apertura', category: 'other', description: 'Contrapartida apertura de caja', amount: cleanOpeningAmount, debit: 0, credit: cleanOpeningAmount, paymentMethod: 'cash', reference: `FISCAL-OPEN-${cashRegister._id}`, sourceType: 'cash', sourceId: cashRegister._id, cashRegister: cashRegister._id, user: req.user._id },
-    ]);
+    ], { ordered: true });
   }
 
   await logAuditEvent({ req, module: 'cash', action: 'cash.opened', metadata: { openingAmount: cleanOpeningAmount, cashRegister: cashRegister._id } });
@@ -125,13 +125,13 @@ router.post('/cash-session/close', protect, async (req, res) => {
     await cashRegister.save();
     closing = await DailyClosing.create({ fechaContable, cashRegister: cashRegister._id, user: cashRegister.user, closedBy: req.user._id, openedAt: cashRegister.openedAt, closedAt: now, openingAmount: cashRegister.openingAmount, expectedCash: summary.expectedCash, countedCash: cleanCountedCash, difference, salesTotal: summary.totals.sales, expensesTotal: summary.totals.expenses, entradasTotal: summary.totals.entradas, salidasTotal: summary.totals.salidas, netTotal: summary.totals.net, paymentMethods: summary.paymentMethods, observations: cashRegister.observations });
     if (summary.paymentMethods.length) {
-      await PaymentMethodSummary.create(summary.paymentMethods.map((row) => ({ fechaContable, cashRegister: cashRegister._id, method: row.method || 'cash', count: row.count || 0, total: roundMoney(row.total || 0), status: 'cerrado', generatedBy: req.user._id })));
+      await PaymentMethodSummary.create(summary.paymentMethods.map((row) => ({ fechaContable, cashRegister: cashRegister._id, method: row.method || 'cash', count: row.count || 0, total: roundMoney(row.total || 0), status: 'cerrado', generatedBy: req.user._id })), { ordered: true });
     }
     await CashMovement.create({ cashRegister: cashRegister._id, user: req.user._id, cajero: cashRegister.user, fecha: now, fechaContable, type: 'cierre', amount: cleanCountedCash, paymentMethod: 'cash', reference: `FISCAL-CLOSE-${closing._id}`, description: 'Cierre de caja desde ruta fiscal compatible', sourceType: 'closing', sourceId: closing._id });
     await AccountingEntry.create([
       { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'out', type: 'cierre', category: 'cash', description: 'Retiro/control de efectivo por cierre fiscal compatible', amount: cleanCountedCash, debit: 0, credit: cleanCountedCash, paymentMethod: 'cash', reference: `FISCAL-CLOSE-${closing._id}`, sourceType: 'closing', sourceId: closing._id, cashRegister: cashRegister._id, user: req.user._id },
       { date: now, fecha: now, dayKey: fechaContable, fechaContable, direction: 'out', type: 'cierre', category: 'other', description: 'Contrapartida cierre fiscal compatible', amount: cleanCountedCash, debit: cleanCountedCash, credit: 0, paymentMethod: 'cash', reference: `FISCAL-CLOSE-${closing._id}`, sourceType: 'closing', sourceId: closing._id, cashRegister: cashRegister._id, user: req.user._id },
-    ]);
+    ], { ordered: true });
   }
 
   const cashSession = await CashSessionState.findOneAndUpdate(
