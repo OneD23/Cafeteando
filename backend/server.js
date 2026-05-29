@@ -22,6 +22,7 @@ const saleRoutes = require('./src/routes/sales');
 const clientRoutes = require('./src/routes/clients');
 const fiscalRoutes = require('./src/routes/fiscal');
 const accountingRoutes = require('./src/routes/accounting');
+const reportRoutes = require('./src/routes/reports');
 
 // Conectar a MongoDB
 connectDB();
@@ -33,6 +34,7 @@ const defaultAllowedOrigins = [
   'http://localhost:8081', // Expo Web (actual)
   'http://localhost:19006', // Expo Web (legacy)
   'http://localhost:3000',
+  'https://cafeteando-virid.vercel.app', // Frontend producción Vercel
 ];
 
 const envAllowedOrigins = [
@@ -43,6 +45,15 @@ const envAllowedOrigins = [
   .filter(Boolean);
 
 const allowedOrigins = Array.from(new Set([...defaultAllowedOrigins, ...envAllowedOrigins]));
+
+const isAllowedVercelPreview = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === 'https:' && parsed.hostname.endsWith('.vercel.app');
+  } catch (e) {
+    return false;
+  }
+};
 
 const corsOptions = {
   origin: (origin, callback) => {
@@ -63,7 +74,7 @@ const corsOptions = {
       }
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowedOrigins.includes(origin) || isAllowedVercelPreview(origin)) {
       return callback(null, true);
     }
 
@@ -71,7 +82,8 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Idempotency-Key'],
+  optionsSuccessStatus: 204,
 };
 
 const io = socketIo(server, {
@@ -86,16 +98,18 @@ app.use(helmet());
 app.use(compression());
 app.use(morgan('dev'));
 
+// CORS debe ejecutarse antes del rate limit y de las rutas para que los
+// preflight OPTIONS de Vercel reciban Access-Control-Allow-Origin.
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 100
+  max: 100,
+  skip: (req) => req.method === 'OPTIONS',
 });
 app.use('/api/', limiter);
-
-// CORS
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(attachRequestContext);
@@ -117,6 +131,9 @@ app.use('/api/sales', saleRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/fiscal', fiscalRoutes);
 app.use('/api/accounting', accountingRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/v1/accounting', accountingRoutes);
+app.use('/api/v1/reports', reportRoutes);
 
 // Socket.io events
 socketEvents(io);
