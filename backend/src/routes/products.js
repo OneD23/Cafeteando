@@ -51,7 +51,7 @@ router.post('/', protect, async (req, res) => {
       image,
       sku,
       hasRecipe: true
-    }], { session });
+    }], { session, ordered: true });
 
     // Crear receta
     const newRecipe = await Recipe.create([{
@@ -60,7 +60,7 @@ router.post('/', protect, async (req, res) => {
       preparationTime: recipe.preparationTime || 2,
       instructions: recipe.instructions,
       image: recipe.image
-    }], { session });
+    }], { session, ordered: true });
 
     // Actualizar producto con referencia a receta
     product[0].recipeId = newRecipe[0]._id;

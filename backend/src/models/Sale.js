@@ -64,12 +64,23 @@ const saleSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  cashRegister: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'CashRegister',
+    index: true
+  },
+  invoice: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Invoice',
+    index: true
+  },
   status: {
     type: String,
     enum: ['completed', 'cancelled', 'refunded'],
     default: 'completed'
   },
-  syncId: String,
+  syncId: { type: String, index: true, sparse: true },
+  idempotencyKey: { type: String, unique: true, sparse: true },
   deviceId: String, // Para tracking de dispositivo móvil
   offlineCreated: {
     type: Boolean,
@@ -99,7 +110,6 @@ saleSchema.methods.calculateProfit = function() {
 };
 
 saleSchema.index({ createdAt: -1 });
-saleSchema.index({ saleId: 1 }, { unique: true, sparse: true });
 saleSchema.index({ 'customer.phone': 1 });
 saleSchema.index({ 'customer.cedula': 1 });
 

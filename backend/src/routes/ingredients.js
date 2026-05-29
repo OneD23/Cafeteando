@@ -143,7 +143,7 @@ router.post('/:id/restock', protect, async (req, res) => {
       newStock: ingredient.stock,
       reason: reason || 'Reposición manual',
       user: req.user._id
-    }], { session });
+    }], { session, ordered: true });
 
     await session.commitTransaction();
 
@@ -295,7 +295,7 @@ router.post('/deduct', protect, async (req, res) => {
         newStock: ingredient.stock,
         reason: saleId ? `Venta: ${saleId}` : 'Deducción por receta',
         user: req.user._id
-      }], { session });
+      }], { session, ordered: true });
 
       updatedIngredients.push(ingredient);
     }
