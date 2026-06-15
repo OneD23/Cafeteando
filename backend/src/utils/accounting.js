@@ -4,6 +4,48 @@ const PAYMENT_METHODS = ['cash', 'card', 'transfer', 'mixed'];
 const CASH_MOVEMENT_TYPES = ['entrada', 'salida', 'venta', 'gasto', 'apertura', 'cierre', 'ajuste', 'anulación'];
 const EXPENSE_CATEGORIES = ['hielo', 'vasos', 'servilletas', 'ingredientes', 'transporte', 'nómina', 'mantenimiento', 'otros'];
 
+const ACCOUNT_CATALOG = Object.freeze({
+  cash: { code: '1105', name: 'Caja general', group: 'Activo', nature: 'debit' },
+  bank: { code: '1110', name: 'Bancos y transferencias', group: 'Activo', nature: 'debit' },
+  cardReceivable: { code: '1305', name: 'Cuentas por cobrar tarjetas', group: 'Activo', nature: 'debit' },
+  inventory: { code: '1435', name: 'Inventario de insumos', group: 'Activo', nature: 'debit' },
+  sales: { code: '4135', name: 'Ingresos por ventas', group: 'Ingresos', nature: 'credit' },
+  taxPayable: { code: '2408', name: 'ITBIS por pagar', group: 'Pasivo', nature: 'credit' },
+  cogs: { code: '6135', name: 'Costo de ventas', group: 'Costos', nature: 'debit' },
+  expenses: { code: '5135', name: 'Gastos operativos', group: 'Gastos', nature: 'debit' },
+  equityControl: { code: '3105', name: 'Capital / contrapartida de control', group: 'Patrimonio', nature: 'credit' },
+  adjustments: { code: '5195', name: 'Ajustes contables', group: 'Gastos', nature: 'debit' },
+});
+
+const paymentAccountKey = (paymentMethod) => {
+  if (paymentMethod === 'transfer') return 'bank';
+  if (paymentMethod === 'card') return 'cardReceivable';
+  return 'cash';
+};
+
+const accountKeyForEntry = (entry = {}) => {
+  if (entry.category === 'payment') return paymentAccountKey(entry.paymentMethod);
+  if (entry.category === 'cash') return 'cash';
+  if (entry.category === 'sale') return 'sales';
+  if (entry.category === 'tax') return 'taxPayable';
+  if (entry.category === 'cogs') return 'cogs';
+  if (entry.category === 'inventory') return 'inventory';
+  if (entry.category === 'expense') return 'expenses';
+  if (entry.category === 'adjustment') return 'adjustments';
+  return 'equityControl';
+};
+
+const buildAccountingLinesForEntry = (entry = {}) => {
+  const accountKey = accountKeyForEntry(entry);
+  const account = ACCOUNT_CATALOG[accountKey] || ACCOUNT_CATALOG.adjustments;
+  return [{
+    account: account.code,
+    description: `${account.name}${entry.description ? ` · ${entry.description}` : ''}`,
+    debit: roundMoney(entry.debit || 0),
+    credit: roundMoney(entry.credit || 0),
+  }];
+};
+
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 const toDate = (value, fieldName = 'fecha') => {
@@ -109,6 +151,7 @@ module.exports = {
   PAYMENT_METHODS,
   CASH_MOVEMENT_TYPES,
   EXPENSE_CATEGORIES,
+  ACCOUNT_CATALOG,
   roundMoney,
   toDate,
   toAccountingDate,
@@ -117,4 +160,5 @@ module.exports = {
   assertPositiveAmount,
   buildPrintableHtml,
   objectIdOrNull,
+  buildAccountingLinesForEntry,
 };

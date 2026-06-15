@@ -20,6 +20,7 @@ const {
   assertPositiveAmount,
   buildPrintableHtml,
   objectIdOrNull,
+  ACCOUNT_CATALOG,
 } = require('../utils/accounting');
 
 const router = express.Router();
@@ -120,6 +121,48 @@ const sendPrintable = (res, html, downloadName = 'cafeteando-reporte.html') => {
   res.setHeader('Content-Disposition', `inline; filename="${downloadName}"`);
   res.send(html);
 };
+
+
+router.get('/catalog', protect, async (req, res) => {
+  try {
+    const accounts = Object.entries(ACCOUNT_CATALOG).map(([key, value]) => ({ key, ...value }));
+    res.json({ success: true, count: accounts.length, data: accounts });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.get('/trial-balance', protect, async (req, res) => {
+  try {
+    const match = { status: 'activo' };
+    const dateRange = dateRangeFromQuery(req.query);
+    if (dateRange) match.date = dateRange;
+    const rows = await AccountingEntry.aggregate([
+      { $match: match },
+      { $project: {
+        lines: {
+          $cond: [
+            { $gt: [{ $size: { $ifNull: ['$lines', []] } }, 0] },
+            '$lines',
+            [{ account: '$category', description: '$description', debit: '$debit', credit: '$credit' }],
+          ],
+        },
+      } },
+      { $unwind: '$lines' },
+      { $group: { _id: '$lines.account', debit: { $sum: '$lines.debit' }, credit: { $sum: '$lines.credit' }, movements: { $sum: 1 } } },
+      { $project: { account: '$_id', debit: { $round: ['$debit', 2] }, credit: { $round: ['$credit', 2] }, balance: { $round: [{ $subtract: ['$debit', '$credit'] }, 2] }, movements: 1, _id: 0 } },
+      { $sort: { account: 1 } },
+    ]);
+    const accountNames = Object.values(ACCOUNT_CATALOG).reduce((acc, account) => ({ ...acc, [account.code]: account }), {});
+    const enriched = rows.map((row) => ({ ...row, name: accountNames[row.account]?.name || row.account, group: accountNames[row.account]?.group || 'Sin clasificar', nature: accountNames[row.account]?.nature || null }));
+    const totalDebit = roundMoney(enriched.reduce((sum, row) => sum + row.debit, 0));
+    const totalCredit = roundMoney(enriched.reduce((sum, row) => sum + row.credit, 0));
+    const difference = roundMoney(totalDebit - totalCredit);
+    res.json({ success: true, data: { accounts: enriched, totalDebit, totalCredit, difference, status: Math.abs(difference) < 0.01 ? 'cuadrado' : 'descuadrado' } });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
 
 router.get('/dashboard', protect, async (req, res) => {
   try {
