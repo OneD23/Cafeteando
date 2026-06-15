@@ -95,3 +95,35 @@ test('transactional array creates include ordered true for Mongoose sessions', (
     assert.deepEqual(unsafe, [], `${routeFile} tiene create() con session sin ordered: true`);
   }
 });
+
+test('Alegra-style catalog maps entries to auditable account lines', async () => {
+  const mongoose = require('mongoose');
+  const AccountingEntry = require('../src/models/AccountingEntry');
+  const { ACCOUNT_CATALOG, buildAccountingLinesForEntry } = require('../src/utils/accounting');
+
+  assert.equal(ACCOUNT_CATALOG.cash.code, '1105');
+  assert.equal(ACCOUNT_CATALOG.sales.nature, 'credit');
+
+  const cardPaymentLine = buildAccountingLinesForEntry({ category: 'payment', paymentMethod: 'card', debit: 116, credit: 0, description: 'Cobro tarjeta' });
+  assert.equal(cardPaymentLine[0].account, ACCOUNT_CATALOG.cardReceivable.code);
+  assert.equal(cardPaymentLine[0].debit, 116);
+
+  const entry = new AccountingEntry({
+    date: new Date('2026-05-28T12:00:00.000Z'),
+    dayKey: '2026-05-28',
+    direction: 'in',
+    type: 'venta',
+    category: 'sale',
+    description: 'Ingreso POS',
+    amount: 100,
+    debit: 0,
+    credit: 100,
+    reference: 'FAC-LINES',
+    user: new mongoose.Types.ObjectId(),
+  });
+
+  await entry.validate();
+  assert.equal(entry.lines.length, 1);
+  assert.equal(entry.lines[0].account, ACCOUNT_CATALOG.sales.code);
+  assert.equal(entry.lines[0].credit, 100);
+});
