@@ -95,3 +95,41 @@ test('transactional array creates include ordered true for Mongoose sessions', (
     assert.deepEqual(unsafe, [], `${routeFile} tiene create() con session sin ordered: true`);
   }
 });
+
+test('Alegra-style catalog maps entries to auditable account lines', async () => {
+  const mongoose = require('mongoose');
+  const AccountingEntry = require('../src/models/AccountingEntry');
+  const { ACCOUNT_GROUPS, ACCOUNT_CATALOG, buildAccountingLinesForEntry, getAccountCatalogTree, listAccountCatalog } = require('../src/utils/accounting');
+
+  assert.deepEqual(Object.keys(ACCOUNT_GROUPS), ['assets', 'liabilities', 'equity', 'income', 'expenses', 'costs', 'memorandum']);
+  assert.equal(ACCOUNT_CATALOG.cash.code, '110505');
+  assert.equal(ACCOUNT_CATALOG.sales.nature, 'credit');
+  assert.equal(ACCOUNT_CATALOG.cash.type, 'movement');
+  assert.equal(ACCOUNT_CATALOG.cashEquivalent.type, 'control');
+  assert.equal(ACCOUNT_CATALOG.cardReceivable.thirdPartyBalance, true);
+  assert.ok(getAccountCatalogTree().find((account) => account.code === '1').children.length > 0);
+  assert.ok(listAccountCatalog().some((account) => account.group === 'Cuentas de orden'));
+
+  const cardPaymentLine = buildAccountingLinesForEntry({ category: 'payment', paymentMethod: 'card', debit: 116, credit: 0, description: 'Cobro tarjeta' });
+  assert.equal(cardPaymentLine[0].account, ACCOUNT_CATALOG.cardReceivable.code);
+  assert.equal(cardPaymentLine[0].debit, 116);
+
+  const entry = new AccountingEntry({
+    date: new Date('2026-05-28T12:00:00.000Z'),
+    dayKey: '2026-05-28',
+    direction: 'in',
+    type: 'venta',
+    category: 'sale',
+    description: 'Ingreso POS',
+    amount: 100,
+    debit: 0,
+    credit: 100,
+    reference: 'FAC-LINES',
+    user: new mongoose.Types.ObjectId(),
+  });
+
+  await entry.validate();
+  assert.equal(entry.lines.length, 1);
+  assert.equal(entry.lines[0].account, ACCOUNT_CATALOG.sales.code);
+  assert.equal(entry.lines[0].credit, 100);
+});
