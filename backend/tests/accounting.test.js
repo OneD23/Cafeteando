@@ -95,3 +95,67 @@ test('transactional array creates include ordered true for Mongoose sessions', (
     assert.deepEqual(unsafe, [], `${routeFile} tiene create() con session sin ordered: true`);
   }
 });
+
+test('Alegra-style catalog maps entries to auditable account lines', async () => {
+  const mongoose = require('mongoose');
+  const AccountingEntry = require('../src/models/AccountingEntry');
+  const { ACCOUNT_GROUPS, ACCOUNT_CATALOG, buildAccountingLinesForEntry, getAccountCatalogTree, listAccountCatalog } = require('../src/utils/accounting');
+
+  assert.deepEqual(Object.keys(ACCOUNT_GROUPS), ['assets', 'liabilities', 'equity', 'income', 'expenses', 'costs', 'memorandum']);
+  assert.equal(ACCOUNT_CATALOG.cash.code, '110505');
+  assert.equal(ACCOUNT_CATALOG.sales.nature, 'credit');
+  assert.equal(ACCOUNT_CATALOG.cash.type, 'movement');
+  assert.equal(ACCOUNT_CATALOG.cashEquivalent.type, 'control');
+  assert.equal(ACCOUNT_CATALOG.cardReceivable.thirdPartyBalance, true);
+  assert.ok(getAccountCatalogTree().find((account) => account.code === '1').children.length > 0);
+  assert.ok(listAccountCatalog().some((account) => account.group === 'Cuentas de orden'));
+
+  const cardPaymentLine = buildAccountingLinesForEntry({ category: 'payment', paymentMethod: 'card', debit: 116, credit: 0, description: 'Cobro tarjeta' });
+  assert.equal(cardPaymentLine[0].account, ACCOUNT_CATALOG.cardReceivable.code);
+  assert.equal(cardPaymentLine[0].debit, 116);
+
+  const entry = new AccountingEntry({
+    date: new Date('2026-05-28T12:00:00.000Z'),
+    dayKey: '2026-05-28',
+    direction: 'in',
+    type: 'venta',
+    category: 'sale',
+    description: 'Ingreso POS',
+    amount: 100,
+    debit: 0,
+    credit: 100,
+    reference: 'FAC-LINES',
+    user: new mongoose.Types.ObjectId(),
+  });
+
+  await entry.validate();
+  assert.equal(entry.lines.length, 1);
+  assert.equal(entry.lines[0].account, ACCOUNT_CATALOG.sales.code);
+  assert.equal(entry.lines[0].credit, 100);
+});
+
+test('ingredient model supports composite ingredients and expanded requirements', async () => {
+  const mongoose = require('mongoose');
+  const Ingredient = require('../src/models/Ingredient');
+  const InventoryMovement = require('../src/models/InventoryMovement');
+  const { expandIngredientRequirements, calculateCompositeUnitCost } = require('../src/utils/ingredientComposition');
+
+  assert.ok(Ingredient.schema.path('components'));
+  assert.ok(InventoryMovement.schema.path('type').enumValues.includes('production'));
+  assert.ok(InventoryMovement.schema.path('type').enumValues.includes('component_consumption'));
+
+  const sugarId = new mongoose.Types.ObjectId();
+  const milkId = new mongoose.Types.ObjectId();
+  const syrupId = new mongoose.Types.ObjectId();
+  const ingredients = new Map([
+    [String(sugarId), { _id: sugarId, name: 'Azúcar', stock: 1000, costPerUnit: 0.02, components: [] }],
+    [String(milkId), { _id: milkId, name: 'Leche', stock: 500, costPerUnit: 0.05, components: [] }],
+    [String(syrupId), { _id: syrupId, name: 'Sirope', stock: 0, costPerUnit: 0, components: [{ ingredientId: sugarId, quantity: 2 }, { ingredientId: milkId, quantity: 3 }] }],
+  ]);
+
+  const loadIngredient = async (id) => ingredients.get(String(id));
+  const expanded = await expandIngredientRequirements([{ ingredientId: syrupId, quantity: 4 }], { loadIngredient });
+  assert.equal(expanded.requirements.find((row) => String(row.ingredient._id) === String(sugarId)).quantity, 8);
+  assert.equal(expanded.requirements.find((row) => String(row.ingredient._id) === String(milkId)).quantity, 12);
+  assert.equal(await calculateCompositeUnitCost(ingredients.get(String(syrupId)), { loadIngredient }), 0.19);
+});

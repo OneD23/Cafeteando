@@ -11,12 +11,14 @@ const CashRegister = require('../models/CashRegister');
 const { protect } = require('../middleware/auth');
 const { logAuditEvent } = require('../utils/audit');
 const AccountingEntry = require('../models/AccountingEntry');
+const { expandIngredientRequirements, roundQuantity } = require('../utils/ingredientComposition');
 
 const router = express.Router();
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 const toAccountingDate = (value = new Date()) => new Date(value).toISOString().slice(0, 10);
 const normalizePaymentMethod = (method) => ['cash', 'card', 'transfer', 'mixed'].includes(String(method || '').toLowerCase()) ? String(method).toLowerCase() : 'cash';
+const loadIngredientById = (session = null) => async (id) => Ingredient.findById(id).session(session);
 
 const recoverAccountingCashFromLegacyState = async (userId, session) => {
   const legacyCashState = await CashSessionState.findOne({ key: 'default', isOpen: true }).session(session);
@@ -87,7 +89,7 @@ router.post('/', protect, async (req, res) => {
       }
     }
 
-    // Validar stock de ingredientes para cada item
+    // Validar stock de ingredientes para cada item, expandiendo ingredientes compuestos
     for (const item of items) {
       const product = await Product.findById(item.productId).session(session);
       
@@ -96,13 +98,11 @@ router.post('/', protect, async (req, res) => {
       const recipe = await Recipe.findById(product.recipeId).session(session);
       if (!recipe) continue;
 
-      // Verificar cada ingrediente de la receta
-      for (const recipeItem of recipe.items) {
-        const ingredient = await Ingredient.findById(recipeItem.ingredientId).session(session);
-        const needed = recipeItem.quantity * item.quantity;
-
-        if (!ingredient || ingredient.stock < needed) {
-          throw new Error(`Stock insuficiente: ${ingredient?.name || 'Ingrediente'} para ${product.name}`);
+      const { requirements } = await expandIngredientRequirements(recipe.items, { loadIngredient: loadIngredientById(session) });
+      for (const row of requirements) {
+        const needed = roundQuantity(row.quantity * item.quantity);
+        if (!row.ingredient || row.ingredient.stock < needed) {
+          throw new Error(`Stock insuficiente: ${row.ingredient?.name || 'Ingrediente'} para ${product.name}`);
         }
       }
     }
@@ -117,13 +117,11 @@ router.post('/', protect, async (req, res) => {
       if (!product) throw new Error('Producto no encontrado en la venta');
       const recipe = product?.recipeId ? await Recipe.findById(product.recipeId).session(session) : null;
       
-      // Calcular costo
+      // Calcular costo expandiendo ingredientes compuestos
       let itemCost = 0;
-      if (recipe) {
-        for (const ri of recipe.items) {
-          const ing = await Ingredient.findById(ri.ingredientId).session(session);
-          itemCost += (ing?.costPerUnit || 0) * ri.quantity;
-        }
+      const expandedRecipe = recipe ? await expandIngredientRequirements(recipe.items, { loadIngredient: loadIngredientById(session) }) : { requirements: [] };
+      for (const row of expandedRecipe.requirements) {
+        itemCost += (row.ingredient?.costPerUnit || 0) * row.quantity;
       }
 
       itemCost = roundMoney(itemCost);
@@ -140,14 +138,14 @@ router.post('/', protect, async (req, res) => {
         total: itemTotal
       });
 
-      // Descontar ingredientes
+      // Descontar ingredientes base; si un ingrediente es compuesto, se consumen sus componentes
       if (recipe) {
-        for (const ri of recipe.items) {
-          const ingredient = await Ingredient.findById(ri.ingredientId).session(session);
-          const deductQty = ri.quantity * item.quantity;
+        for (const row of expandedRecipe.requirements) {
+          const ingredient = await Ingredient.findById(row.ingredient._id).session(session);
+          const deductQty = roundQuantity(row.quantity * item.quantity);
           const previousStock = ingredient.stock;
 
-          ingredient.stock = roundMoney(ingredient.stock - deductQty);
+          ingredient.stock = roundQuantity(ingredient.stock - deductQty);
           await ingredient.save({ session });
 
           // Registrar movimiento
