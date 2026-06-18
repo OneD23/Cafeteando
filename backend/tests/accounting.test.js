@@ -99,10 +99,16 @@ test('transactional array creates include ordered true for Mongoose sessions', (
 test('Alegra-style catalog maps entries to auditable account lines', async () => {
   const mongoose = require('mongoose');
   const AccountingEntry = require('../src/models/AccountingEntry');
-  const { ACCOUNT_CATALOG, buildAccountingLinesForEntry } = require('../src/utils/accounting');
+  const { ACCOUNT_GROUPS, ACCOUNT_CATALOG, buildAccountingLinesForEntry, getAccountCatalogTree, listAccountCatalog } = require('../src/utils/accounting');
 
-  assert.equal(ACCOUNT_CATALOG.cash.code, '1105');
+  assert.deepEqual(Object.keys(ACCOUNT_GROUPS), ['assets', 'liabilities', 'equity', 'income', 'expenses', 'costs', 'memorandum']);
+  assert.equal(ACCOUNT_CATALOG.cash.code, '110505');
   assert.equal(ACCOUNT_CATALOG.sales.nature, 'credit');
+  assert.equal(ACCOUNT_CATALOG.cash.type, 'movement');
+  assert.equal(ACCOUNT_CATALOG.cashEquivalent.type, 'control');
+  assert.equal(ACCOUNT_CATALOG.cardReceivable.thirdPartyBalance, true);
+  assert.ok(getAccountCatalogTree().find((account) => account.code === '1').children.length > 0);
+  assert.ok(listAccountCatalog().some((account) => account.group === 'Cuentas de orden'));
 
   const cardPaymentLine = buildAccountingLinesForEntry({ category: 'payment', paymentMethod: 'card', debit: 116, credit: 0, description: 'Cobro tarjeta' });
   assert.equal(cardPaymentLine[0].account, ACCOUNT_CATALOG.cardReceivable.code);

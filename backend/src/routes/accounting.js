@@ -20,7 +20,9 @@ const {
   assertPositiveAmount,
   buildPrintableHtml,
   objectIdOrNull,
-  ACCOUNT_CATALOG,
+  ACCOUNT_GROUPS,
+  listAccountCatalog,
+  getAccountCatalogTree,
 } = require('../utils/accounting');
 
 const router = express.Router();
@@ -125,8 +127,8 @@ const sendPrintable = (res, html, downloadName = 'cafeteando-reporte.html') => {
 
 router.get('/catalog', protect, async (req, res) => {
   try {
-    const accounts = Object.entries(ACCOUNT_CATALOG).map(([key, value]) => ({ key, ...value }));
-    res.json({ success: true, count: accounts.length, data: accounts });
+    const accounts = listAccountCatalog();
+    res.json({ success: true, count: accounts.length, groups: ACCOUNT_GROUPS, tree: getAccountCatalogTree(), data: accounts });
   } catch (error) {
     res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
@@ -153,7 +155,7 @@ router.get('/trial-balance', protect, async (req, res) => {
       { $project: { account: '$_id', debit: { $round: ['$debit', 2] }, credit: { $round: ['$credit', 2] }, balance: { $round: [{ $subtract: ['$debit', '$credit'] }, 2] }, movements: 1, _id: 0 } },
       { $sort: { account: 1 } },
     ]);
-    const accountNames = Object.values(ACCOUNT_CATALOG).reduce((acc, account) => ({ ...acc, [account.code]: account }), {});
+    const accountNames = listAccountCatalog().reduce((acc, account) => ({ ...acc, [account.code]: account }), {});
     const enriched = rows.map((row) => ({ ...row, name: accountNames[row.account]?.name || row.account, group: accountNames[row.account]?.group || 'Sin clasificar', nature: accountNames[row.account]?.nature || null }));
     const totalDebit = roundMoney(enriched.reduce((sum, row) => sum + row.debit, 0));
     const totalCredit = roundMoney(enriched.reduce((sum, row) => sum + row.credit, 0));
