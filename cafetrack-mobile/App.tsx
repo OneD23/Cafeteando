@@ -3,6 +3,7 @@ import { Provider } from 'react-redux';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { store } from './src/store';
@@ -49,13 +50,37 @@ function MainTabs() {
           
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#d4a574',
-        tabBarInactiveTintColor: '#8b6f4e',
-        tabBarStyle: { 
-          backgroundColor: '#1a0f0a', 
-          borderTopColor: '#4a3428',
-          paddingBottom: 5,
+        tabBarActiveTintColor: '#f4b86a',
+        tabBarInactiveTintColor: '#9c8f82',
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '700',
+          marginTop: 2,
         },
+        tabBarItemStyle: {
+          borderRadius: 18,
+          marginHorizontal: 4,
+          marginVertical: 6,
+        },
+        tabBarStyle: { 
+          position: Platform.OS === 'web' ? 'absolute' : 'relative',
+          left: Platform.OS === 'web' ? 24 : 0,
+          right: Platform.OS === 'web' ? 24 : 0,
+          bottom: Platform.OS === 'web' ? 20 : 0,
+          height: Platform.OS === 'web' ? 74 : 68,
+          backgroundColor: '#111827', 
+          borderTopColor: 'rgba(255,255,255,0.08)',
+          borderTopWidth: 1,
+          borderRadius: Platform.OS === 'web' ? 24 : 0,
+          paddingTop: 8,
+          paddingBottom: Platform.OS === 'web' ? 10 : 8,
+          shadowColor: '#000',
+          shadowOpacity: 0.22,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 10 },
+          elevation: 18,
+        },
+        sceneStyle: { backgroundColor: '#0b1118' },
         headerShown: false,
       })}
     >
