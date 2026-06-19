@@ -6,7 +6,8 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-    StatusBar,
+  StatusBar,
+  useWindowDimensions,
   Alert,
   Platform,
   Modal,
@@ -40,6 +41,8 @@ const POSScreen: React.FC = () => {
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const productColumns = width >= 1500 ? 4 : width >= 1000 ? 3 : 2;
   React.useEffect(() => {
     (async () => {
       const remote = await api.getCashSession();
@@ -241,13 +244,18 @@ const POSScreen: React.FC = () => {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1a0f0a" />
       
-      <View style={styles.header}>
-        <Text style={styles.title}>☕ CafeTrack POS</Text>
-        <View style={styles.stats}>
-          <Text style={styles.stat}>Items: {cartItems.length}</Text>
+      <View style={[styles.header, width >= 900 && styles.headerWide]}>
+        <View style={styles.headerCopy}>
+          <Text style={styles.eyebrow}>Terminal de ventas</Text>
+          <Text style={styles.title}>Cafeteando POS</Text>
+          <Text style={styles.subtitle}>Catálogo, caja e inventario en tiempo real</Text>
+        </View>
+        <View style={styles.statsCard}>
+          <Text style={styles.statLabel}>Total actual</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
-          <TouchableOpacity onPress={() => setCashOpenModal(true)}>
-            <Text style={[styles.stat, { color: cashSessionOpen ? '#27ae60' : '#d96d61' }]}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
+          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={() => setCashOpenModal(true)}>
+            <View style={[styles.cashDot, { backgroundColor: cashSessionOpen ? '#12b76a' : '#f04438' }]} />
+            <Text style={styles.cashPillText}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -282,7 +290,8 @@ const POSScreen: React.FC = () => {
 
       <FlatList
         data={filteredProducts}
-        numColumns={2}
+        key={`products-${productColumns}`}
+        numColumns={productColumns}
         keyExtractor={(item) => item.id}
         contentContainerStyle={[styles.productsGrid, { paddingBottom: cartItems.length > 0 ? (cartCollapsed ? 120 : 380) : 24 }]}
         ListEmptyComponent={
@@ -294,16 +303,26 @@ const POSScreen: React.FC = () => {
           </View>
         }
         renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={styles.productCard}
+          <TouchableOpacity
+            style={[styles.productCard, { maxWidth: `${100 / productColumns}%` }]}
             onPress={() => handleAddToCart(item)}
+            activeOpacity={0.88}
           >
-            <Text style={styles.productIcon}>{item.icon}</Text>
-            <Text style={styles.productName}>{item.name}</Text>
-            <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-            <Text style={styles.productStock}>
-              Stock: {hasInventoryData ? item.stock : "—"}
-            </Text>
+            <View style={styles.productTopRow}>
+              <View style={styles.productIconWrap}>
+                <Text style={styles.productIcon}>{item.icon || '☕'}</Text>
+              </View>
+              <View style={[styles.stockBadge, hasInventoryData && item.stock <= 3 ? styles.stockBadgeLow : styles.stockBadgeOk]}>
+                <Text style={styles.stockBadgeText}>{hasInventoryData ? `${item.stock} disp.` : 'Stock —'}</Text>
+              </View>
+            </View>
+            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+            <View style={styles.productBottomRow}>
+              <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
+              <View style={styles.addCircle}>
+                <Ionicons name="add" size={18} color="#1a0f0a" />
+              </View>
+            </View>
           </TouchableOpacity>
         )}
       />
@@ -423,28 +442,69 @@ const styles = StyleSheet.create({
     backgroundColor: "#1a0f0a",
   },
   header: {
-    padding: 16,
+    margin: 16,
+    marginBottom: 12,
+    padding: 18,
+    borderRadius: 24,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: "#2c1810",
+    borderWidth: 1,
+    borderColor: "rgba(212,165,116,0.18)",
+  },
+  headerWide: {
+    paddingHorizontal: 22,
+  },
+  headerCopy: {
+    flex: 1,
+    paddingRight: 14,
+  },
+  eyebrow: {
+    color: "#d4a574",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   title: {
     color: "#f5f1e8",
-    fontSize: 20,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 4,
   },
-  stats: {
-    alignItems: "flex-end",
-  },
-  stat: {
+  subtitle: {
     color: "#8b6f4e",
     fontSize: 12,
+    marginTop: 3,
+  },
+  statsCard: {
+    minWidth: 128,
+    alignItems: "flex-end",
+  },
+  statLabel: {
+    color: "#8b6f4e",
+    fontSize: 11,
+    fontWeight: "700",
   },
   statTotal: {
     color: "#d4a574",
-    fontSize: 18,
-    fontWeight: "bold",
+    fontSize: 24,
+    fontWeight: "900",
+    marginVertical: 4,
   },
+  cashPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cashPillOpen: { backgroundColor: "rgba(18,183,106,0.14)" },
+  cashPillClosed: { backgroundColor: "rgba(240,68,56,0.14)" },
+  cashDot: { width: 7, height: 7, borderRadius: 4 },
+  cashPillText: { color: "#d8c6b2", fontSize: 11, fontWeight: "800" },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -514,41 +574,82 @@ const styles = StyleSheet.create({
   productCard: {
     flex: 1,
     backgroundColor: "#2c1810",
-    margin: 6,
-    borderRadius: 16,
-    padding: 15,
-    alignItems: "center",
+    margin: 7,
+    borderRadius: 18,
+    padding: 12,
     borderWidth: 1,
-    borderColor: "#4a3428",
-    maxWidth: "47%",
+    borderColor: "rgba(212,165,116,0.18)",
+    minHeight: 132,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  productTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  productIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(212,165,116,0.16)",
   },
   productIcon: {
-    fontSize: 40,
-    marginBottom: 8,
+    fontSize: 24,
+  },
+  stockBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  stockBadgeOk: {
+    backgroundColor: "rgba(18,183,106,0.13)",
+  },
+  stockBadgeLow: {
+    backgroundColor: "rgba(240,68,56,0.16)",
+  },
+  stockBadgeText: {
+    color: "#d8c6b2",
+    fontSize: 10,
+    fontWeight: "800",
   },
   productName: {
     color: "#f5f1e8",
     fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
+    fontWeight: "800",
+    minHeight: 34,
+  },
+  productBottomRow: {
+    marginTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   productPrice: {
     color: "#d4a574",
     fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 5,
+    fontWeight: "900",
   },
-  productStock: {
-    color: "#8b6f4e",
-    fontSize: 11,
-    marginTop: 4,
+  addCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#d4a574",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cartSheet: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1a0f0a",
+    backgroundColor: "#2c1810",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 3,

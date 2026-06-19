@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { buildAccountingLinesForEntry } = require('../utils/accounting');
 
 const accountingLineSchema = new mongoose.Schema({
   account: { type: String, required: true, trim: true },
@@ -35,6 +36,9 @@ accountingEntrySchema.pre('validate', function(next) {
   this.fechaContable = this.fechaContable || this.dayKey;
   this.debit = this.debit ?? (this.direction === 'out' ? this.amount : 0);
   this.credit = this.credit ?? (this.direction === 'in' ? this.amount : 0);
+  if (!this.lines?.length) {
+    this.lines = buildAccountingLinesForEntry(this);
+  }
   next();
 });
 
