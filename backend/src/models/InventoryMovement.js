@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const movementSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['sale', 'restock', 'adjustment', 'waste', 'recipe_deduction'],
+    enum: ['sale', 'restock', 'adjustment', 'waste', 'recipe_deduction', 'production', 'component_consumption'],
     required: true
   },
   ingredient: {

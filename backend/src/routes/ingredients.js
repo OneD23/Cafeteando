@@ -4,8 +4,29 @@ const InventoryMovement = require('../models/InventoryMovement');
 const Recipe = require('../models/Recipe');
 const { protect } = require('../middleware/auth');
 const { logAuditEvent } = require('../utils/audit');
+const { expandIngredientRequirements, calculateCompositeUnitCost, roundQuantity } = require('../utils/ingredientComposition');
 
 const router = express.Router();
+
+const loadIngredientById = (session = null) => async (id) => {
+  const query = Ingredient.findById(id);
+  return session ? query.session(session) : query;
+};
+
+const assertValidComponents = (ingredientId, components = []) => {
+  if (!Array.isArray(components)) return;
+  const seen = new Set();
+  components.forEach((component) => {
+    const componentId = String(component.ingredientId || '');
+    if (!componentId) throw new Error('Cada componente debe indicar ingredientId');
+    if (ingredientId && componentId === String(ingredientId)) throw new Error('Un ingrediente no puede componerse de sí mismo');
+    if (seen.has(componentId)) throw new Error('No repitas el mismo ingrediente componente');
+    seen.add(componentId);
+    if (!Number.isFinite(Number(component.quantity)) || Number(component.quantity) <= 0) {
+      throw new Error('La cantidad de cada componente debe ser mayor a 0');
+    }
+  });
+};
 
 // @route   GET /api/ingredients
 // @desc    Obtener todos los ingredientes
@@ -13,6 +34,7 @@ const router = express.Router();
 router.get('/', protect, async (req, res) => {
   try {
     const ingredients = await Ingredient.find({ isActive: true })
+      .populate('components.ingredientId', 'name unit stock costPerUnit isActive')
       .sort({ name: 1 });
 
     res.json({
@@ -56,6 +78,7 @@ router.get('/low-stock', protect, async (req, res) => {
 // @access  Private/Admin/Manager
 router.post('/', protect, async (req, res) => {
   try {
+    assertValidComponents(null, req.body.components);
     const ingredient = await Ingredient.create({
       ...req.body,
       modifiedBy: req.user._id
@@ -81,6 +104,7 @@ router.post('/', protect, async (req, res) => {
 // @access  Private
 router.put('/:id', protect, async (req, res) => {
   try {
+    assertValidComponents(req.params.id, req.body.components);
     const ingredient = await Ingredient.findByIdAndUpdate(
       req.params.id,
       {
@@ -105,12 +129,76 @@ router.put('/:id', protect, async (req, res) => {
       success: true,
       data: ingredient
     });
-    await logAuditEvent({ req, module: 'inventory', action: 'inventory.adjusted', metadata: { ingredientId: ingredient._id, newStock, reason: reason || null } });
+    await logAuditEvent({ req, module: 'inventory', action: 'ingredient.updated', metadata: { ingredientId: ingredient._id, componentCount: ingredient.components?.length || 0 } });
   } catch (error) {
     res.status(400).json({
       success: false,
       message: error.message
     });
+  }
+});
+
+// @route   GET /api/ingredients/:id/composition
+// @desc    Obtener composición expandida de un ingrediente
+// @access  Private
+router.get('/:id/composition', protect, async (req, res) => {
+  try {
+    const ingredient = await Ingredient.findById(req.params.id).populate('components.ingredientId', 'name unit stock costPerUnit isActive');
+    if (!ingredient) return res.status(404).json({ success: false, message: 'Ingrediente no encontrado' });
+    const unitCost = await calculateCompositeUnitCost(ingredient, { loadIngredient: loadIngredientById() });
+    const expansion = await expandIngredientRequirements(ingredient.components || [], { loadIngredient: loadIngredientById(), path: [String(ingredient._id)] });
+    res.json({ success: true, data: { ingredient, unitCost, requirements: expansion.requirements, details: expansion.details } });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// @route   POST /api/ingredients/:id/produce
+// @desc    Producir un ingrediente compuesto consumiendo sus componentes
+// @access  Private
+router.post('/:id/produce', protect, async (req, res) => {
+  const session = await Ingredient.startSession();
+  session.startTransaction();
+  try {
+    const quantity = Number(req.body?.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('quantity debe ser mayor a 0');
+    const ingredient = await Ingredient.findById(req.params.id).session(session);
+    if (!ingredient) throw new Error('Ingrediente no encontrado');
+    if (!ingredient.components?.length) throw new Error('Solo se puede producir un ingrediente compuesto');
+
+    const { requirements } = await expandIngredientRequirements(ingredient.components, { loadIngredient: loadIngredientById(session), path: [String(ingredient._id)] });
+    for (const row of requirements) {
+      const needed = roundQuantity(row.quantity * quantity);
+      if (row.ingredient.stock < needed) throw new Error(`Stock insuficiente para ${row.ingredient.name}`);
+    }
+
+    const updatedIngredients = [];
+    for (const row of requirements) {
+      const component = await Ingredient.findById(row.ingredient._id).session(session);
+      const needed = roundQuantity(row.quantity * quantity);
+      const previousStock = component.stock;
+      component.stock = roundQuantity(component.stock - needed);
+      await component.save({ session });
+      await InventoryMovement.create([{ type: 'component_consumption', ingredient: component._id, quantity: -needed, previousStock, newStock: component.stock, reason: `Producción de ${ingredient.name}`, user: req.user._id }], { session, ordered: true });
+      updatedIngredients.push(component);
+    }
+
+    const previousStock = ingredient.stock;
+    ingredient.stock = roundQuantity(ingredient.stock + quantity);
+    ingredient.costPerUnit = await calculateCompositeUnitCost(ingredient, { loadIngredient: loadIngredientById(session) });
+    ingredient.lastRestocked = new Date();
+    await ingredient.save({ session });
+    await InventoryMovement.create([{ type: 'production', ingredient: ingredient._id, quantity, previousStock, newStock: ingredient.stock, reason: req.body?.reason || `Producción de ${ingredient.name}`, user: req.user._id }], { session, ordered: true });
+    updatedIngredients.push(ingredient);
+
+    await session.commitTransaction();
+    req.app.get('io').emit('inventory:updated', updatedIngredients);
+    res.json({ success: true, data: ingredient, components: updatedIngredients });
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ success: false, message: error.message });
+  } finally {
+    session.endSession();
   }
 });
 
@@ -272,19 +360,21 @@ router.post('/deduct', protect, async (req, res) => {
 
     const updatedIngredients = [];
 
-    for (const recipeItem of recipe.items) {
-      const ingredient = await Ingredient.findById(recipeItem.ingredientId).session(session);
+    const { requirements } = await expandIngredientRequirements(recipe.items, { loadIngredient: loadIngredientById(session) });
+
+    for (const row of requirements) {
+      const ingredient = await Ingredient.findById(row.ingredient._id).session(session);
       if (!ingredient) {
         throw new Error('Ingrediente no encontrado en receta');
       }
 
-      const deductQty = recipeItem.quantity * saleQuantity;
+      const deductQty = roundQuantity(row.quantity * saleQuantity);
       if (ingredient.stock < deductQty) {
         throw new Error(`Stock insuficiente para ${ingredient.name}`);
       }
 
       const previousStock = ingredient.stock;
-      ingredient.stock -= deductQty;
+      ingredient.stock = roundQuantity(ingredient.stock - deductQty);
       await ingredient.save({ session });
 
       await InventoryMovement.create([{

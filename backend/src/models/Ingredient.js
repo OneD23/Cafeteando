@@ -1,5 +1,25 @@
 const mongoose = require('mongoose');
 
+
+const ingredientComponentSchema = new mongoose.Schema({
+  ingredientId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Ingredient',
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  wastePercentage: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  }
+}, { _id: false });
+
 const ingredientSchema = new mongoose.Schema({
   name: { 
     type: String, 
@@ -31,6 +51,7 @@ const ingredientSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  components: [ingredientComponentSchema],
   supplier: {
     type: String,
     trim: true
@@ -65,6 +86,10 @@ const ingredientSchema = new mongoose.Schema({
 // Virtual para valor total del inventario
 ingredientSchema.virtual('totalValue').get(function() {
   return this.stock * this.costPerUnit;
+});
+
+ingredientSchema.virtual('isComposite').get(function() {
+  return Array.isArray(this.components) && this.components.length > 0;
 });
 
 // Middleware pre-save para actualizar lastModified

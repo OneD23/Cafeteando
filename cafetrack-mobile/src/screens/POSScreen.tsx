@@ -242,12 +242,17 @@ const POSScreen: React.FC = () => {
       <StatusBar barStyle="light-content" backgroundColor="#1a0f0a" />
       
       <View style={styles.header}>
-        <Text style={styles.title}>☕ CafeTrack POS</Text>
-        <View style={styles.stats}>
-          <Text style={styles.stat}>Items: {cartItems.length}</Text>
+        <View>
+          <Text style={styles.eyebrow}>Terminal de ventas</Text>
+          <Text style={styles.title}>Cafeteando POS</Text>
+          <Text style={styles.subtitle}>Catálogo, caja e inventario en tiempo real</Text>
+        </View>
+        <View style={styles.statsCard}>
+          <Text style={styles.statLabel}>Total actual</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
-          <TouchableOpacity onPress={() => setCashOpenModal(true)}>
-            <Text style={[styles.stat, { color: cashSessionOpen ? '#27ae60' : '#d96d61' }]}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
+          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={() => setCashOpenModal(true)}>
+            <View style={[styles.cashDot, { backgroundColor: cashSessionOpen ? '#12b76a' : '#f04438' }]} />
+            <Text style={styles.cashPillText}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -294,16 +299,26 @@ const POSScreen: React.FC = () => {
           </View>
         }
         renderItem={({ item }) => (
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.productCard}
             onPress={() => handleAddToCart(item)}
+            activeOpacity={0.88}
           >
-            <Text style={styles.productIcon}>{item.icon}</Text>
-            <Text style={styles.productName}>{item.name}</Text>
-            <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
-            <Text style={styles.productStock}>
-              Stock: {hasInventoryData ? item.stock : "—"}
-            </Text>
+            <View style={styles.productTopRow}>
+              <View style={styles.productIconWrap}>
+                <Text style={styles.productIcon}>{item.icon || '☕'}</Text>
+              </View>
+              <View style={[styles.stockBadge, hasInventoryData && item.stock <= 3 ? styles.stockBadgeLow : styles.stockBadgeOk]}>
+                <Text style={styles.stockBadgeText}>{hasInventoryData ? `${item.stock} disp.` : 'Stock —'}</Text>
+              </View>
+            </View>
+            <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+            <View style={styles.productBottomRow}>
+              <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
+              <View style={styles.addCircle}>
+                <Ionicons name="add" size={18} color="#0b1118" />
+              </View>
+            </View>
           </TouchableOpacity>
         )}
       />
@@ -420,41 +435,75 @@ const POSScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a0f0a",
+    backgroundColor: "#0b1118",
   },
   header: {
-    padding: 16,
+    margin: 16,
+    marginBottom: 12,
+    padding: 18,
+    borderRadius: 24,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  eyebrow: {
+    color: "#f4b86a",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1.1,
+    textTransform: "uppercase",
   },
   title: {
-    color: "#f5f1e8",
-    fontSize: 20,
-    fontWeight: "bold",
+    color: "#f8fafc",
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 4,
   },
-  stats: {
+  subtitle: {
+    color: "#8ea0b5",
+    fontSize: 12,
+    marginTop: 3,
+  },
+  statsCard: {
+    minWidth: 128,
     alignItems: "flex-end",
   },
-  stat: {
-    color: "#8b6f4e",
-    fontSize: 12,
+  statLabel: {
+    color: "#8ea0b5",
+    fontSize: 11,
+    fontWeight: "700",
   },
   statTotal: {
-    color: "#d4a574",
-    fontSize: 18,
-    fontWeight: "bold",
+    color: "#f4b86a",
+    fontSize: 24,
+    fontWeight: "900",
+    marginVertical: 4,
   },
+  cashPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cashPillOpen: { backgroundColor: "rgba(18,183,106,0.14)" },
+  cashPillClosed: { backgroundColor: "rgba(240,68,56,0.14)" },
+  cashDot: { width: 7, height: 7, borderRadius: 4 },
+  cashPillText: { color: "#d0d5dd", fontSize: 11, fontWeight: "800" },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2c1810",
+    backgroundColor: "#111827",
     margin: 16,
     marginTop: 0,
     borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#4a3428",
+    borderColor: "#263244",
   },
   searchInput: {
     flex: 1,
@@ -470,25 +519,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryChip: {
-    backgroundColor: "#2c1810",
-    borderColor: "#4a3428",
+    backgroundColor: "#111827",
+    borderColor: "#263244",
     borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   categoryChipActive: {
-    backgroundColor: "#d4a574",
-    borderColor: "#d4a574",
+    backgroundColor: "#f4b86a",
+    borderColor: "#f4b86a",
   },
   categoryChipText: {
-    color: "#d4a574",
+    color: "#f4b86a",
     fontSize: 12,
     textTransform: "capitalize",
     fontWeight: "600",
   },
   categoryChipTextActive: {
-    color: "#1a0f0a",
+    color: "#0b1118",
   },
   productsGrid: {
     padding: 8,
@@ -513,46 +562,88 @@ const styles = StyleSheet.create({
   },
   productCard: {
     flex: 1,
-    backgroundColor: "#2c1810",
-    margin: 6,
-    borderRadius: 16,
-    padding: 15,
-    alignItems: "center",
+    backgroundColor: "#111827",
+    margin: 7,
+    borderRadius: 22,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#4a3428",
+    borderColor: "rgba(255,255,255,0.08)",
     maxWidth: "47%",
+    minHeight: 154,
+    shadowColor: "#000",
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  productTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  productIconWrap: {
+    width: 46,
+    height: 46,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(244,184,106,0.13)",
   },
   productIcon: {
-    fontSize: 40,
-    marginBottom: 8,
+    fontSize: 28,
+  },
+  stockBadge: {
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  stockBadgeOk: {
+    backgroundColor: "rgba(18,183,106,0.13)",
+  },
+  stockBadgeLow: {
+    backgroundColor: "rgba(240,68,56,0.16)",
+  },
+  stockBadgeText: {
+    color: "#d0d5dd",
+    fontSize: 10,
+    fontWeight: "800",
   },
   productName: {
-    color: "#f5f1e8",
-    fontSize: 14,
-    fontWeight: "600",
-    textAlign: "center",
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "800",
+    minHeight: 38,
+  },
+  productBottomRow: {
+    marginTop: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
   productPrice: {
-    color: "#d4a574",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginTop: 5,
+    color: "#f4b86a",
+    fontSize: 19,
+    fontWeight: "900",
   },
-  productStock: {
-    color: "#8b6f4e",
-    fontSize: 11,
-    marginTop: 4,
+  addCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#f4b86a",
+    alignItems: "center",
+    justifyContent: "center",
   },
   cartSheet: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#1a0f0a",
+    backgroundColor: "#111827",
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 3,
-    borderTopColor: "#d4a574",
+    borderTopColor: "#f4b86a",
     padding: 20,
     paddingBottom: 30,
     maxHeight: 400,
@@ -603,8 +694,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   qtyBtn: {
-    backgroundColor: "#2c1810",
-    borderColor: "#4a3428",
+    backgroundColor: "#111827",
+    borderColor: "#263244",
     borderWidth: 1,
     borderRadius: 8,
     width: 24,
@@ -613,7 +704,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   qtyBtnText: {
-    color: "#d4a574",
+    color: "#f4b86a",
     fontWeight: "700",
   },
   qtyValue: {
@@ -623,7 +714,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   cartItemPrice: {
-    color: "#d4a574",
+    color: "#f4b86a",
   },
   cartTotal: {
     flexDirection: "row",
@@ -667,7 +758,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   checkoutText: {
-    color: "#1a0f0a",
+    color: "#0b1118",
     fontSize: 18,
     fontWeight: "bold",
   },

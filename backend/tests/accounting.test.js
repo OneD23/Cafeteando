@@ -133,3 +133,29 @@ test('Alegra-style catalog maps entries to auditable account lines', async () =>
   assert.equal(entry.lines[0].account, ACCOUNT_CATALOG.sales.code);
   assert.equal(entry.lines[0].credit, 100);
 });
+
+test('ingredient model supports composite ingredients and expanded requirements', async () => {
+  const mongoose = require('mongoose');
+  const Ingredient = require('../src/models/Ingredient');
+  const InventoryMovement = require('../src/models/InventoryMovement');
+  const { expandIngredientRequirements, calculateCompositeUnitCost } = require('../src/utils/ingredientComposition');
+
+  assert.ok(Ingredient.schema.path('components'));
+  assert.ok(InventoryMovement.schema.path('type').enumValues.includes('production'));
+  assert.ok(InventoryMovement.schema.path('type').enumValues.includes('component_consumption'));
+
+  const sugarId = new mongoose.Types.ObjectId();
+  const milkId = new mongoose.Types.ObjectId();
+  const syrupId = new mongoose.Types.ObjectId();
+  const ingredients = new Map([
+    [String(sugarId), { _id: sugarId, name: 'Azúcar', stock: 1000, costPerUnit: 0.02, components: [] }],
+    [String(milkId), { _id: milkId, name: 'Leche', stock: 500, costPerUnit: 0.05, components: [] }],
+    [String(syrupId), { _id: syrupId, name: 'Sirope', stock: 0, costPerUnit: 0, components: [{ ingredientId: sugarId, quantity: 2 }, { ingredientId: milkId, quantity: 3 }] }],
+  ]);
+
+  const loadIngredient = async (id) => ingredients.get(String(id));
+  const expanded = await expandIngredientRequirements([{ ingredientId: syrupId, quantity: 4 }], { loadIngredient });
+  assert.equal(expanded.requirements.find((row) => String(row.ingredient._id) === String(sugarId)).quantity, 8);
+  assert.equal(expanded.requirements.find((row) => String(row.ingredient._id) === String(milkId)).quantity, 12);
+  assert.equal(await calculateCompositeUnitCost(ingredients.get(String(syrupId)), { loadIngredient }), 0.19);
+});
