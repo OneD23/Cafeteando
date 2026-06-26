@@ -11,6 +11,7 @@ import {
   Image,
   Platform,
   ScrollView,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSelector, useDispatch } from 'react-redux';
@@ -29,6 +30,8 @@ import { addJournalEntry } from '../store/accountingSlice';
 
 export const InventoryScreen: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
+  const { width } = useWindowDimensions();
+  const isCompact = width < 390;
   const { ingredients, lowStockAlerts } = useSelector((state: any) => state.inventory);
   const { products, recipes } = useSelector((state: any) => state.recipes);
   
@@ -241,7 +244,7 @@ export const InventoryScreen: React.FC = () => {
             <Text style={styles.ingredientUnit}>Unidad: {item.unit}</Text>
           </View>
           <View style={[styles.stockBadge, isLowStock && styles.lowStockBadge]}>
-            <Text style={styles.stockText}>{item.stock} {item.unit}</Text>
+            <Text style={styles.stockText} numberOfLines={1}>{item.stock} {item.unit}</Text>
           </View>
         </View>
 
@@ -480,12 +483,12 @@ export const InventoryScreen: React.FC = () => {
       {/* Ingredient Modal */}
       <Modal visible={showIngredientModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, isCompact && styles.modalContentCompact]}>
             <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={styles.modalScrollContent}
             >
-            <Text style={styles.modalTitle}>{editingIngredient ? '✏️ Editar Ingrediente' : '➕ Nuevo Ingrediente'}</Text>
+            <Text style={styles.modalTitle} numberOfLines={2}>{editingIngredient ? '✏️ Editar Ingrediente' : '➕ Nuevo Ingrediente'}</Text>
             
             <Text style={styles.inputLabel}>Nombre</Text>
             <TextInput
@@ -501,7 +504,7 @@ export const InventoryScreen: React.FC = () => {
               {units.map(u => (
                 <TouchableOpacity
                   key={u}
-                  style={[styles.unitChip, ingUnit === u && styles.unitChipActive]}
+                  style={[styles.unitChip, isCompact && styles.unitChipCompact, ingUnit === u && styles.unitChipActive]}
                   onPress={() => setIngUnit(u)}
                 >
                   <Text style={[styles.unitText, ingUnit === u && styles.unitTextActive]}>{u}</Text>
@@ -540,13 +543,13 @@ export const InventoryScreen: React.FC = () => {
             />
 
             <View style={styles.compositionHeader}>
-              <View>
+              <View style={styles.compositionHeaderText}>
                 <Text style={styles.inputLabel}>Composición</Text>
                 <Text style={styles.compositionHelp}>Opcional: indica si este ingrediente se prepara usando otros ingredientes.</Text>
               </View>
               <TouchableOpacity style={styles.addComponentBtn} onPress={addComponentRow}>
                 <Ionicons name="add" size={16} color="#1a0f0a" />
-                <Text style={styles.addComponentText}>Componente</Text>
+                <Text style={styles.addComponentText} numberOfLines={1}>Componente</Text>
               </TouchableOpacity>
             </View>
 
@@ -566,7 +569,7 @@ export const InventoryScreen: React.FC = () => {
                         disabled={disabled}
                         onPress={() => setIngComponents((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, ingredientId: optionId } : row))}
                       >
-                        <Text style={[styles.componentChoiceText, selected && styles.componentChoiceTextActive]}>{option.name}</Text>
+                        <Text style={[styles.componentChoiceText, selected && styles.componentChoiceTextActive]} numberOfLines={1}>{option.name}</Text>
                       </TouchableOpacity>
                     );
                   })}
@@ -868,17 +871,23 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
+    width: '100%',
     backgroundColor: '#1a0f0a',
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
-    padding: 25,
-    maxHeight: '80%',
+    padding: 20,
+    maxHeight: '88%',
+  },
+  modalContentCompact: {
+    paddingHorizontal: 16,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
   },
   modalScrollContent: {
     paddingBottom: 10,
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#f5f1e8',
     marginBottom: 20,
@@ -900,15 +909,22 @@ const styles = StyleSheet.create({
   },
   unitSelector: {
     flexDirection: 'row',
-    gap: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   unitChip: {
-    paddingHorizontal: 16,
+    minWidth: 58,
+    alignItems: 'center',
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#2c1810',
     borderWidth: 1,
     borderColor: '#4a3428',
+  },
+  unitChipCompact: {
+    minWidth: 52,
+    paddingHorizontal: 12,
   },
   unitChipActive: {
     backgroundColor: '#d4a574',
@@ -947,16 +963,21 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 10,
   },
+  compositionHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
   compositionHelp: {
     color: '#8b6f4e',
     fontSize: 12,
-    maxWidth: 240,
+    lineHeight: 17,
   },
   addComponentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: '#d4a574',
+    flexShrink: 0,
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 10,
