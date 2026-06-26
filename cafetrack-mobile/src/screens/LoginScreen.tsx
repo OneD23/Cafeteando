@@ -63,7 +63,7 @@ const LoginScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0b1118" />
+      <StatusBar barStyle="light-content" backgroundColor="#1a0f0a" />
       <View style={styles.backgroundGlow} />
 
       <View style={styles.shell}>
@@ -102,11 +102,11 @@ const LoginScreen: React.FC = () => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Usuario</Text>
             <View style={styles.inputShell}>
-              <Ionicons name="person-outline" size={18} color="#8ea0b5" />
+              <Ionicons name="person-outline" size={18} color="#8b6f4e" />
               <TextInput
                 style={styles.input}
                 placeholder="usuario@cafeteando"
-                placeholderTextColor="#667085"
+                placeholderTextColor="#8b6f4e"
                 value={username}
                 onChangeText={setUsername}
                 autoCapitalize="none"
@@ -118,11 +118,11 @@ const LoginScreen: React.FC = () => {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Contraseña</Text>
             <View style={styles.inputShell}>
-              <Ionicons name="lock-closed-outline" size={18} color="#8ea0b5" />
+              <Ionicons name="lock-closed-outline" size={18} color="#8b6f4e" />
               <TextInput
                 style={styles.input}
                 placeholder="••••••••"
-                placeholderTextColor="#667085"
+                placeholderTextColor="#8b6f4e"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -132,12 +132,12 @@ const LoginScreen: React.FC = () => {
           </View>
 
           <TouchableOpacity style={[styles.button, isLoading && styles.buttonDisabled]} onPress={handleLogin} disabled={isLoading}>
-            {isLoading ? <ActivityIndicator color="#0b1118" /> : <Text style={styles.buttonText}>Entrar al sistema</Text>}
+            {isLoading ? <ActivityIndicator color="#1a0f0a" /> : <Text style={styles.buttonText}>Entrar al sistema</Text>}
           </TouchableOpacity>
 
           <View style={styles.divider} />
           <TouchableOpacity style={styles.bootstrapButton} onPress={() => setShowBootstrapModal(true)}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#f4b86a" />
+            <Ionicons name="shield-checkmark-outline" size={18} color="#d4a574" />
             <Text style={styles.bootstrapLink}>Configurar primer administrador</Text>
           </TouchableOpacity>
         </View>
@@ -154,7 +154,7 @@ const LoginScreen: React.FC = () => {
                 key={field}
                 style={styles.modalInput}
                 placeholder={{ name: 'Nombre', username: 'Usuario', email: 'Email', password: 'Contraseña' }[field]}
-                placeholderTextColor="#667085"
+                placeholderTextColor="#8b6f4e"
                 value={bootstrapForm[field]}
                 onChangeText={(value) => setBootstrapForm((prev) => ({ ...prev, [field]: value }))}
                 autoCapitalize="none"
@@ -180,7 +180,7 @@ const LoginScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0b1118' },
+  container: { flex: 1, backgroundColor: '#1a0f0a' },
   backgroundGlow: {
     position: 'absolute',
     top: -120,
@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
     width: 360,
     height: 360,
     borderRadius: 180,
-    backgroundColor: 'rgba(244,184,106,0.16)',
+    backgroundColor: 'rgba(212,165,116,0.16)',
   },
   shell: {
     flex: 1,
@@ -206,46 +206,46 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: '#f4b86a',
+    backgroundColor: '#d4a574',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
-    shadowColor: '#f4b86a',
+    shadowColor: '#d4a574',
     shadowOpacity: 0.35,
     shadowRadius: 20,
   },
-  brandMarkText: { color: '#0b1118', fontSize: 28, fontWeight: '900' },
-  eyebrow: { color: '#f4b86a', fontSize: 13, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
-  heroTitle: { color: '#f8fafc', fontSize: Platform.OS === 'web' ? 48 : 34, lineHeight: Platform.OS === 'web' ? 56 : 40, fontWeight: '900', marginTop: 12 },
-  heroCopy: { color: '#a8b3c4', fontSize: 16, lineHeight: 24, marginTop: 16, maxWidth: 560 },
+  brandMarkText: { color: '#1a0f0a', fontSize: 28, fontWeight: '900' },
+  eyebrow: { color: '#d4a574', fontSize: 13, fontWeight: '800', letterSpacing: 1.2, textTransform: 'uppercase' },
+  heroTitle: { color: '#f5f1e8', fontSize: Platform.OS === 'web' ? 48 : 34, lineHeight: Platform.OS === 'web' ? 56 : 40, fontWeight: '900', marginTop: 12 },
+  heroCopy: { color: '#d8c6b2', fontSize: 16, lineHeight: 24, marginTop: 16, maxWidth: 560 },
   metricsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 28 },
-  metricCard: { minWidth: 142, padding: 16, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.09)' },
-  metricValue: { color: '#f8fafc', fontSize: 18, fontWeight: '900' },
-  metricLabel: { color: '#9aa8ba', fontSize: 12, marginTop: 4 },
-  loginCard: { width: '100%', maxWidth: 430, padding: 26, borderRadius: 28, backgroundColor: '#111827', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)', shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 18 },
+  metricCard: { minWidth: 142, padding: 16, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(212,165,116,0.20)' },
+  metricValue: { color: '#f5f1e8', fontSize: 18, fontWeight: '900' },
+  metricLabel: { color: '#8b6f4e', fontSize: 12, marginTop: 4 },
+  loginCard: { width: '100%', maxWidth: 430, padding: 26, borderRadius: 28, backgroundColor: '#2c1810', borderWidth: 1, borderColor: 'rgba(212,165,116,0.24)', shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 28, shadowOffset: { width: 0, height: 18 }, elevation: 18 },
   cardHeader: { marginBottom: 22 },
-  cardTitle: { color: '#f8fafc', fontSize: 28, fontWeight: '900' },
-  cardSubtitle: { color: '#98a2b3', marginTop: 6 },
+  cardTitle: { color: '#f5f1e8', fontSize: 28, fontWeight: '900' },
+  cardSubtitle: { color: '#8b6f4e', marginTop: 6 },
   inputGroup: { marginBottom: 16 },
-  inputLabel: { color: '#d0d5dd', fontSize: 13, fontWeight: '700', marginBottom: 8 },
-  inputShell: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#0f172a', borderRadius: 16, borderWidth: 1, borderColor: '#263244', paddingHorizontal: 14 },
-  input: { flex: 1, color: '#f8fafc', fontSize: 16, paddingVertical: 15 },
-  button: { backgroundColor: '#f4b86a', borderRadius: 16, padding: 17, alignItems: 'center', marginTop: 6 },
+  inputLabel: { color: '#d8c6b2', fontSize: 13, fontWeight: '700', marginBottom: 8 },
+  inputShell: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#1a0f0a', borderRadius: 16, borderWidth: 1, borderColor: '#4a3428', paddingHorizontal: 14 },
+  input: { flex: 1, color: '#f5f1e8', fontSize: 16, paddingVertical: 15 },
+  button: { backgroundColor: '#d4a574', borderRadius: 16, padding: 17, alignItems: 'center', marginTop: 6 },
   buttonDisabled: { opacity: 0.7 },
-  buttonText: { color: '#0b1118', fontSize: 16, fontWeight: '900' },
-  divider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginVertical: 20 },
+  buttonText: { color: '#1a0f0a', fontSize: 16, fontWeight: '900' },
+  divider: { height: 1, backgroundColor: 'rgba(212,165,116,0.18)', marginVertical: 20 },
   bootstrapButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
-  bootstrapLink: { color: '#f4b86a', fontSize: 14, fontWeight: '800' },
+  bootstrapLink: { color: '#d4a574', fontSize: 14, fontWeight: '800' },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(3,7,18,0.78)', justifyContent: 'center', padding: 20 },
-  modalCard: { width: '100%', maxWidth: 460, alignSelf: 'center', backgroundColor: '#111827', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
-  modalTitle: { color: '#f8fafc', fontSize: 22, fontWeight: '900', marginBottom: 8 },
-  modalDescription: { color: '#98a2b3', marginBottom: 16, fontSize: 13, lineHeight: 19 },
-  modalInput: { backgroundColor: '#0f172a', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: '#f8fafc', borderWidth: 1, borderColor: '#263244', marginBottom: 10 },
+  modalCard: { width: '100%', maxWidth: 460, alignSelf: 'center', backgroundColor: '#2c1810', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(212,165,116,0.24)' },
+  modalTitle: { color: '#f5f1e8', fontSize: 22, fontWeight: '900', marginBottom: 8 },
+  modalDescription: { color: '#8b6f4e', marginBottom: 16, fontSize: 13, lineHeight: 19 },
+  modalInput: { backgroundColor: '#1a0f0a', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 13, color: '#f5f1e8', borderWidth: 1, borderColor: '#4a3428', marginBottom: 10 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  cancelBtn: { flex: 1, backgroundColor: '#1f2937', borderRadius: 14, padding: 13, alignItems: 'center' },
-  cancelBtnText: { color: '#f8fafc', fontWeight: '800' },
-  confirmBtn: { flex: 1, backgroundColor: '#f4b86a', borderRadius: 14, padding: 13, alignItems: 'center' },
-  confirmBtnText: { color: '#0b1118', fontWeight: '900' },
+  cancelBtn: { flex: 1, backgroundColor: '#3a2a20', borderRadius: 14, padding: 13, alignItems: 'center' },
+  cancelBtnText: { color: '#f5f1e8', fontWeight: '800' },
+  confirmBtn: { flex: 1, backgroundColor: '#d4a574', borderRadius: 14, padding: 13, alignItems: 'center' },
+  confirmBtnText: { color: '#1a0f0a', fontWeight: '900' },
 });
 
 export default LoginScreen;

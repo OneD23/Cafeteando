@@ -50,8 +50,8 @@ function MainTabs() {
           
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#f4b86a',
-        tabBarInactiveTintColor: '#9c8f82',
+        tabBarActiveTintColor: '#d4a574',
+        tabBarInactiveTintColor: '#8b6f4e',
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '700',
@@ -68,8 +68,8 @@ function MainTabs() {
           right: Platform.OS === 'web' ? 24 : 0,
           bottom: Platform.OS === 'web' ? 20 : 0,
           height: Platform.OS === 'web' ? 74 : 68,
-          backgroundColor: '#111827', 
-          borderTopColor: 'rgba(255,255,255,0.08)',
+          backgroundColor: '#2c1810', 
+          borderTopColor: 'rgba(212,165,116,0.18)',
           borderTopWidth: 1,
           borderRadius: Platform.OS === 'web' ? 24 : 0,
           paddingTop: 8,
@@ -80,7 +80,7 @@ function MainTabs() {
           shadowOffset: { width: 0, height: 10 },
           elevation: 18,
         },
-        sceneStyle: { backgroundColor: '#0b1118' },
+        sceneStyle: { backgroundColor: '#1a0f0a' },
         headerShown: false,
       })}
     >
