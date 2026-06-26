@@ -978,6 +978,10 @@ const styles = StyleSheet.create({
   compositionHeaderText: {
     minWidth: 0,
   },
+  compositionHeaderText: {
+    flex: 1,
+    minWidth: 0,
+  },
   compositionHelp: {
     color: '#8b6f4e',
     fontSize: 12,
