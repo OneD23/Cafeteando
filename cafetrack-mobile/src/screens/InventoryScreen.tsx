@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -47,10 +47,21 @@ export const InventoryScreen: React.FC = () => {
   const [ingUnit, setIngUnit] = useState('g');
   const [ingStock, setIngStock] = useState('');
   const [ingMinStock, setIngMinStock] = useState('');
-  const [ingCost, setIngCost] = useState('');
+  const [ingTotalCost, setIngTotalCost] = useState('');
   const [ingComponents, setIngComponents] = useState<Array<{ ingredientId: string; quantity: string }>>([]);
 
   const units = ['g', 'ml', 'unidad', 'oz'];
+
+  const calculatedUnitCost = useMemo(() => {
+    const stock = parseFloat(ingStock);
+    const totalCost = parseFloat(ingTotalCost);
+
+    if (!Number.isFinite(stock) || stock <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
+      return 0;
+    }
+
+    return totalCost / stock;
+  }, [ingStock, ingTotalCost]);
 
   const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
 
@@ -97,14 +108,27 @@ export const InventoryScreen: React.FC = () => {
     setIngUnit('g');
     setIngStock('');
     setIngMinStock('');
-    setIngCost('');
+    setIngTotalCost('');
     setIngComponents([]);
     setEditingIngredient(null);
   };
 
   const handleSaveIngredient = () => {
-    if (!ingName || !ingStock || !ingMinStock || !ingCost) {
+    if (!ingName || !ingStock || !ingMinStock || !ingTotalCost) {
       Alert.alert('Error', 'Completa todos los campos');
+      return;
+    }
+
+    const stockQuantity = parseFloat(ingStock);
+    const totalCost = parseFloat(ingTotalCost);
+
+    if (!Number.isFinite(stockQuantity) || stockQuantity <= 0) {
+      Alert.alert('Cantidad inválida', 'Ingresa una cantidad mayor a 0 para calcular el costo unitario.');
+      return;
+    }
+
+    if (!Number.isFinite(totalCost) || totalCost < 0) {
+      Alert.alert('Precio inválido', 'Ingresa un precio total válido.');
       return;
     }
 
@@ -129,9 +153,9 @@ export const InventoryScreen: React.FC = () => {
     const payload = {
       name: ingName,
       unit: ingUnit as any,
-      stock: parseFloat(ingStock),
+      stock: stockQuantity,
       minStock: parseFloat(ingMinStock),
-      costPerUnit: parseFloat(ingCost),
+      costPerUnit: calculatedUnitCost,
       components,
     };
 
@@ -144,7 +168,7 @@ export const InventoryScreen: React.FC = () => {
         direction: 'in',
         category: 'inventory',
         description: `Alta ingrediente: ${ingName}`,
-        amount: parseFloat(ingStock) * parseFloat(ingCost),
+        amount: totalCost,
       }));
     }
 
@@ -300,7 +324,7 @@ export const InventoryScreen: React.FC = () => {
               setIngUnit(item.unit || 'g');
               setIngStock(String(item.stock ?? ''));
               setIngMinStock(String(item.minStock ?? ''));
-              setIngCost(String(item.costPerUnit ?? ''));
+              setIngTotalCost(String(((item.stock || 0) * (item.costPerUnit || 0)).toFixed(2)));
               setIngComponents(normalizeComponentsForForm(item.components || []));
               setShowIngredientModal(true);
             }}
@@ -546,15 +570,18 @@ export const InventoryScreen: React.FC = () => {
               placeholderTextColor="#8b6f4e"
             />
 
-            <Text style={styles.inputLabel}>Costo por unidad ($)</Text>
+            <Text style={styles.inputLabel}>Precio total pagado ($)</Text>
             <TextInput
               style={styles.modalInput}
-              value={ingCost}
-              onChangeText={setIngCost}
+              value={ingTotalCost}
+              onChangeText={setIngTotalCost}
               keyboardType="decimal-pad"
               placeholder="0.00"
               placeholderTextColor="#8b6f4e"
             />
+            <Text style={styles.calculatedCostText}>
+              Costo unitario automático: ${calculatedUnitCost.toFixed(6)}/{ingUnit}
+            </Text>
 
             <View style={styles.compositionHeader}>
               <View style={styles.compositionHeaderText}>
@@ -923,6 +950,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#4a3428',
   },
+  calculatedCostText: {
+    color: '#d4a574',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: -4,
+  },
   unitSelector: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -974,9 +1007,6 @@ const styles = StyleSheet.create({
   },
   compositionHeader: {
     marginTop: 6,
-  },
-  compositionHeaderText: {
-    minWidth: 0,
   },
   compositionHeaderText: {
     flex: 1,
