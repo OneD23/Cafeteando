@@ -35,6 +35,15 @@ export const addIngredient = createAsyncThunk(
   }
 );
 
+export const updateIngredient = createAsyncThunk(
+  'inventory/updateIngredient',
+  async (ingredientData: any) => {
+    const id = String(ingredientData.id || ingredientData._id || '');
+    const response = await api.updateIngredient(id, ingredientData);
+    return response.data;
+  }
+);
+
 export const deleteIngredient = createAsyncThunk(
   'inventory/deleteIngredient',
   async (id: string) => {
@@ -83,14 +92,6 @@ const inventorySlice = createSlice({
     setIngredients: (state, action) => {
       state.ingredients = action.payload;
       state.lastSync = new Date().toISOString();
-    },
-    updateIngredient: (state, action) => {
-      const index = state.ingredients.findIndex((i: any) => i.id === action.payload.id);
-      if (index !== -1) {
-        state.ingredients[index] = action.payload;
-      } else {
-        state.ingredients.push(action.payload);
-      }
     },
     setMovements: (state, action: PayloadAction<any[]>) => {
       state.movements = action.payload || [];
@@ -161,6 +162,16 @@ const inventorySlice = createSlice({
         state.loading = false;
         state.error = action.error.message || null;
       })
+      // updateIngredient
+      .addCase(updateIngredient.fulfilled, (state, action) => {
+        const index = state.ingredients.findIndex((i: any) => i.id === action.payload.id);
+        if (index !== -1) {
+          state.ingredients[index] = action.payload;
+        } else {
+          state.ingredients.push(action.payload);
+        }
+        state.lowStockAlerts = state.ingredients.filter((ing: any) => ing.stock <= ing.minStock).map((ing: any) => ing.id);
+      })
       // deleteIngredient
       .addCase(deleteIngredient.fulfilled, (state, action) => {
         state.ingredients = state.ingredients.filter((i: any) => i.id !== action.payload);
@@ -194,5 +205,5 @@ const inventorySlice = createSlice({
   },
 });
 
-export const { setIngredients, updateIngredient, setMovements, consumeIngredients } = inventorySlice.actions;
+export const { setIngredients, setMovements, consumeIngredients } = inventorySlice.actions;
 export default inventorySlice.reducer;

@@ -45,6 +45,7 @@ export const InventoryScreen: React.FC = () => {
   const [ingStock, setIngStock] = useState('');
   const [ingMinStock, setIngMinStock] = useState('');
   const [ingCost, setIngCost] = useState('');
+  const [ingComponents, setIngComponents] = useState<Array<{ ingredientId: string; quantity: string }>>([]);
 
   const units = ['g', 'ml', 'unidad', 'oz'];
 
@@ -94,6 +95,7 @@ export const InventoryScreen: React.FC = () => {
     setIngStock('');
     setIngMinStock('');
     setIngCost('');
+    setIngComponents([]);
     setEditingIngredient(null);
   };
 
@@ -103,19 +105,38 @@ export const InventoryScreen: React.FC = () => {
       return;
     }
 
+    const components = ingComponents
+      .filter((component) => component.ingredientId && parseFloat(component.quantity) > 0)
+      .map((component) => ({ ingredientId: component.ingredientId, quantity: parseFloat(component.quantity) }));
+
+    const repeatedComponent = components.find((component, index) =>
+      components.findIndex((candidate) => candidate.ingredientId === component.ingredientId) !== index
+    );
+    if (repeatedComponent) {
+      Alert.alert('Composición duplicada', 'No repitas el mismo ingrediente dentro de la composición.');
+      return;
+    }
+
+    const editingId = editingIngredient ? entityId(editingIngredient) : '';
+    if (editingId && components.some((component) => component.ingredientId === editingId)) {
+      Alert.alert('Composición inválida', 'Un ingrediente no puede estar compuesto por sí mismo.');
+      return;
+    }
+
     const payload = {
       name: ingName,
       unit: ingUnit as any,
       stock: parseFloat(ingStock),
       minStock: parseFloat(ingMinStock),
       costPerUnit: parseFloat(ingCost),
+      components,
     };
 
     if (editingIngredient) {
-      dispatch(updateIngredient({ ...editingIngredient, ...payload, id: entityId(editingIngredient) }));
+      dispatch(updateIngredient({ ...editingIngredient, ...payload, id: entityId(editingIngredient) }) as any);
       Alert.alert('Actualizado', `${ingName} fue actualizado correctamente.`);
     } else {
-      dispatch(addIngredient(payload));
+      dispatch(addIngredient(payload) as any);
       dispatch(addJournalEntry({
         direction: 'in',
         category: 'inventory',
@@ -183,6 +204,32 @@ export const InventoryScreen: React.FC = () => {
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const componentOptions = ingredients.filter((ingredient: any) => entityId(ingredient) !== (editingIngredient ? entityId(editingIngredient) : ''));
+
+  const componentDisplayName = (component: any) => {
+    const componentId = String(component?.ingredientId?.id || component?.ingredientId?._id || component?.ingredientId || '');
+    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.name || component?.ingredientId?.name || 'Ingrediente';
+  };
+
+  const componentDisplayUnit = (component: any) => {
+    const componentId = String(component?.ingredientId?.id || component?.ingredientId?._id || component?.ingredientId || '');
+    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.unit || component?.ingredientId?.unit || '';
+  };
+
+  const normalizeComponentsForForm = (components: any[] = []) => components.map((component) => ({
+    ingredientId: String(component?.ingredientId?.id || component?.ingredientId?._id || component?.ingredientId || ''),
+    quantity: String(component?.quantity ?? ''),
+  })).filter((component) => component.ingredientId);
+
+  const addComponentRow = () => {
+    const firstAvailable = componentOptions.find((ingredient: any) => !ingComponents.some((component) => component.ingredientId === entityId(ingredient)));
+    if (!firstAvailable) {
+      Alert.alert('Sin ingredientes disponibles', 'Crea otro ingrediente para poder usarlo como componente.');
+      return;
+    }
+    setIngComponents((prev) => [...prev, { ingredientId: entityId(firstAvailable), quantity: '' }]);
+  };
+
   const renderIngredientItem = ({ item }: { item: any }) => {
     const isLowStock = lowStockAlerts.includes(item.id);
     
@@ -203,6 +250,17 @@ export const InventoryScreen: React.FC = () => {
           <Text style={styles.detailText}>Costo: ${item.costPerUnit.toFixed(3)}/{item.unit}</Text>
           <Text style={styles.detailText}>Valor total: ${(item.stock * item.costPerUnit).toFixed(2)}</Text>
         </View>
+
+        {item.components?.length > 0 && (
+          <View style={styles.compositionPreview}>
+            <Text style={styles.compositionTitle}>Compuesto por:</Text>
+            {item.components.map((component: any, index: number) => (
+              <Text key={`${entityId(item)}-component-${index}`} style={styles.compositionItem}>
+                • {componentDisplayName(component)}: {component.quantity} {componentDisplayUnit(component)}
+              </Text>
+            ))}
+          </View>
+        )}
 
         {isLowStock && (
           <View style={styles.alertBanner}>
@@ -226,6 +284,7 @@ export const InventoryScreen: React.FC = () => {
               setIngStock(String(item.stock ?? ''));
               setIngMinStock(String(item.minStock ?? ''));
               setIngCost(String(item.costPerUnit ?? ''));
+              setIngComponents(normalizeComponentsForForm(item.components || []));
               setShowIngredientModal(true);
             }}
           >
@@ -479,6 +538,55 @@ export const InventoryScreen: React.FC = () => {
               placeholder="0.00"
               placeholderTextColor="#8b6f4e"
             />
+
+            <View style={styles.compositionHeader}>
+              <View>
+                <Text style={styles.inputLabel}>Composición</Text>
+                <Text style={styles.compositionHelp}>Opcional: indica si este ingrediente se prepara usando otros ingredientes.</Text>
+              </View>
+              <TouchableOpacity style={styles.addComponentBtn} onPress={addComponentRow}>
+                <Ionicons name="add" size={16} color="#1a0f0a" />
+                <Text style={styles.addComponentText}>Componente</Text>
+              </TouchableOpacity>
+            </View>
+
+            {ingComponents.length === 0 ? (
+              <Text style={styles.emptyCompositionText}>Sin componentes: se manejará como ingrediente base.</Text>
+            ) : ingComponents.map((component, index) => (
+              <View key={`component-row-${index}`} style={styles.componentRow}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.componentChoices}>
+                  {componentOptions.map((option: any) => {
+                    const optionId = entityId(option);
+                    const selected = component.ingredientId === optionId;
+                    const disabled = !selected && ingComponents.some((row) => row.ingredientId === optionId);
+                    return (
+                      <TouchableOpacity
+                        key={optionId}
+                        style={[styles.componentChoice, selected && styles.componentChoiceActive, disabled && styles.componentChoiceDisabled]}
+                        disabled={disabled}
+                        onPress={() => setIngComponents((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, ingredientId: optionId } : row))}
+                      >
+                        <Text style={[styles.componentChoiceText, selected && styles.componentChoiceTextActive]}>{option.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <View style={styles.componentQuantityRow}>
+                  <TextInput
+                    style={[styles.modalInput, styles.componentQuantityInput]}
+                    value={component.quantity}
+                    onChangeText={(quantity) => setIngComponents((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, quantity } : row))}
+                    keyboardType="decimal-pad"
+                    placeholder="Cantidad"
+                    placeholderTextColor="#8b6f4e"
+                  />
+                  <Text style={styles.componentUnitText}>{ingredients.find((ingredient: any) => entityId(ingredient) === component.ingredientId)?.unit || ''}</Text>
+                  <TouchableOpacity style={styles.removeComponentBtn} onPress={() => setIngComponents((prev) => prev.filter((_, rowIndex) => rowIndex !== index))}>
+                    <Ionicons name="trash-outline" size={18} color="#c0392b" />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
 
             <View style={styles.modalButtons}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => { resetIngredientForm(); setShowIngredientModal(false); }}>
@@ -812,6 +920,118 @@ const styles = StyleSheet.create({
   unitTextActive: {
     color: '#1a0f0a',
     fontWeight: 'bold',
+  },
+  compositionPreview: {
+    backgroundColor: '#1a0f0a',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+  },
+  compositionTitle: {
+    color: '#d4a574',
+    fontWeight: 'bold',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  compositionItem: {
+    color: '#d8c6b2',
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  compositionHeader: {
+    marginTop: 6,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: 10,
+  },
+  compositionHelp: {
+    color: '#8b6f4e',
+    fontSize: 12,
+    maxWidth: 240,
+  },
+  addComponentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#d4a574',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  addComponentText: {
+    color: '#1a0f0a',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  emptyCompositionText: {
+    color: '#8b6f4e',
+    fontSize: 12,
+    backgroundColor: '#2c1810',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+  },
+  componentRow: {
+    backgroundColor: '#2c1810',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+  },
+  componentChoices: {
+    marginBottom: 8,
+  },
+  componentChoice: {
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginRight: 8,
+    backgroundColor: '#1a0f0a',
+  },
+  componentChoiceActive: {
+    backgroundColor: '#d4a574',
+    borderColor: '#d4a574',
+  },
+  componentChoiceDisabled: {
+    opacity: 0.35,
+  },
+  componentChoiceText: {
+    color: '#d4a574',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  componentChoiceTextActive: {
+    color: '#1a0f0a',
+  },
+  componentQuantityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  componentQuantityInput: {
+    flex: 1,
+  },
+  componentUnitText: {
+    color: '#8b6f4e',
+    minWidth: 42,
+    fontSize: 12,
+  },
+  removeComponentBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1a0f0a',
+    borderWidth: 1,
+    borderColor: '#4a3428',
   },
   modalButtons: {
     flexDirection: 'row',
