@@ -439,7 +439,7 @@ const POSScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#1a0f0a",
+    backgroundColor: "#0b1118",
   },
   header: {
     margin: 16,
@@ -508,13 +508,13 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#2c1810",
+    backgroundColor: "#111827",
     margin: 16,
     marginTop: 0,
     borderRadius: 12,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "#4a3428",
+    borderColor: "#263244",
   },
   searchInput: {
     flex: 1,
@@ -530,25 +530,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   categoryChip: {
-    backgroundColor: "#2c1810",
-    borderColor: "#4a3428",
+    backgroundColor: "#111827",
+    borderColor: "#263244",
     borderWidth: 1,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
   categoryChipActive: {
-    backgroundColor: "#d4a574",
-    borderColor: "#d4a574",
+    backgroundColor: "#f4b86a",
+    borderColor: "#f4b86a",
   },
   categoryChipText: {
-    color: "#d4a574",
+    color: "#f4b86a",
     fontSize: 12,
     textTransform: "capitalize",
     fontWeight: "600",
   },
   categoryChipTextActive: {
-    color: "#1a0f0a",
+    color: "#0b1118",
   },
   productsGrid: {
     padding: 8,
@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 30,
     borderTopRightRadius: 30,
     borderTopWidth: 3,
-    borderTopColor: "#d4a574",
+    borderTopColor: "#f4b86a",
     padding: 20,
     paddingBottom: 30,
     maxHeight: 400,
@@ -704,8 +704,8 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   qtyBtn: {
-    backgroundColor: "#2c1810",
-    borderColor: "#4a3428",
+    backgroundColor: "#111827",
+    borderColor: "#263244",
     borderWidth: 1,
     borderRadius: 8,
     width: 24,
@@ -714,7 +714,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   qtyBtnText: {
-    color: "#d4a574",
+    color: "#f4b86a",
     fontWeight: "700",
   },
   qtyValue: {
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   cartItemPrice: {
-    color: "#d4a574",
+    color: "#f4b86a",
   },
   cartTotal: {
     flexDirection: "row",
@@ -768,7 +768,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   checkoutText: {
-    color: "#1a0f0a",
+    color: "#0b1118",
     fontSize: 18,
     fontWeight: "bold",
   },
