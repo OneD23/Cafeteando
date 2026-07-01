@@ -48,9 +48,22 @@ export const InventoryScreen: React.FC = () => {
   const [ingStock, setIngStock] = useState('');
   const [ingMinStock, setIngMinStock] = useState('');
   const [ingTotalCost, setIngTotalCost] = useState('');
+  const [ingPackageCount, setIngPackageCount] = useState('');
+  const [ingQuantityPerPackage, setIngQuantityPerPackage] = useState('');
   const [ingComponents, setIngComponents] = useState<Array<{ ingredientId: string; quantity: string }>>([]);
 
   const units = ['g', 'ml', 'unidad', 'oz'];
+
+  const bulkPurchaseStock = useMemo(() => {
+    const packageCount = parseFloat(ingPackageCount);
+    const quantityPerPackage = parseFloat(ingQuantityPerPackage);
+
+    if (!Number.isFinite(packageCount) || packageCount <= 0 || !Number.isFinite(quantityPerPackage) || quantityPerPackage <= 0) {
+      return 0;
+    }
+
+    return packageCount * quantityPerPackage;
+  }, [ingPackageCount, ingQuantityPerPackage]);
 
   const calculatedUnitCost = useMemo(() => {
     const stock = parseFloat(ingStock);
@@ -109,6 +122,8 @@ export const InventoryScreen: React.FC = () => {
     setIngStock('');
     setIngMinStock('');
     setIngTotalCost('');
+    setIngPackageCount('');
+    setIngQuantityPerPackage('');
     setIngComponents([]);
     setEditingIngredient(null);
   };
@@ -325,6 +340,8 @@ export const InventoryScreen: React.FC = () => {
               setIngStock(String(item.stock ?? ''));
               setIngMinStock(String(item.minStock ?? ''));
               setIngTotalCost(String(((item.stock || 0) * (item.costPerUnit || 0)).toFixed(2)));
+              setIngPackageCount('');
+              setIngQuantityPerPackage('');
               setIngComponents(normalizeComponentsForForm(item.components || []));
               setShowIngredientModal(true);
             }}
@@ -550,7 +567,51 @@ export const InventoryScreen: React.FC = () => {
               ))}
             </View>
 
-            <Text style={styles.inputLabel}>Stock inicial</Text>
+            <Text style={styles.inputLabel}>Compra por cajas / paquetes (opcional)</Text>
+            <View style={styles.bulkCalculatorCard}>
+              <Text style={styles.bulkCalculatorHelp}>
+                Si compras varias cajas, escribe cuántas son y cuánto trae cada una. Ej: 10 cajas × 500 ml = 5000 ml en stock.
+              </Text>
+              <View style={styles.bulkInputRow}>
+                <View style={styles.bulkInputColumn}>
+                  <Text style={styles.bulkInputLabel}>Cajas / paquetes</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={ingPackageCount}
+                    onChangeText={setIngPackageCount}
+                    keyboardType="decimal-pad"
+                    placeholder="Ej: 10"
+                    placeholderTextColor="#8b6f4e"
+                  />
+                </View>
+                <View style={styles.bulkInputColumn}>
+                  <Text style={styles.bulkInputLabel}>Cantidad por caja ({ingUnit})</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={ingQuantityPerPackage}
+                    onChangeText={setIngQuantityPerPackage}
+                    keyboardType="decimal-pad"
+                    placeholder="Ej: 500"
+                    placeholderTextColor="#8b6f4e"
+                  />
+                </View>
+              </View>
+              <TouchableOpacity
+                style={[styles.applyBulkBtn, bulkPurchaseStock <= 0 && styles.applyBulkBtnDisabled]}
+                onPress={() => {
+                  if (bulkPurchaseStock <= 0) {
+                    Alert.alert('Datos incompletos', 'Ingresa cuántas cajas son y cuánto trae cada una.');
+                    return;
+                  }
+                  setIngStock(String(bulkPurchaseStock));
+                }}
+              >
+                <Ionicons name="calculator" size={18} color="#1a0f0a" />
+                <Text style={styles.applyBulkBtnText}>Usar {bulkPurchaseStock > 0 ? `${bulkPurchaseStock} ${ingUnit}` : 'cálculo'} como stock</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Stock inicial total ({ingUnit})</Text>
             <TextInput
               style={styles.modalInput}
               value={ingStock}
@@ -949,6 +1010,50 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#4a3428',
+  },
+
+  bulkCalculatorCard: {
+    backgroundColor: '#21140d',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    padding: 12,
+    gap: 12,
+  },
+  bulkCalculatorHelp: {
+    color: '#c7b8a0',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  bulkInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  bulkInputColumn: {
+    flex: 1,
+  },
+  bulkInputLabel: {
+    color: '#d4a574',
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  applyBulkBtn: {
+    backgroundColor: '#d4a574',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  applyBulkBtnDisabled: {
+    opacity: 0.55,
+  },
+  applyBulkBtnText: {
+    color: '#1a0f0a',
+    fontSize: 13,
+    fontWeight: 'bold',
   },
   calculatedCostText: {
     color: '#d4a574',
