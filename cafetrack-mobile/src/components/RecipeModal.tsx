@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
 import { Ingredient, RecipeItem } from '../types';
 import { addProduct, updateProduct, updateRecipe } from '../store/recipesSlice';
+import { api } from '../api/client';
 
 interface RecipeModalProps {
   visible: boolean;
@@ -104,7 +105,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
     input.click();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name || !price || selectedIngredients.length === 0) {
       Alert.alert('Error', 'Completa todos los campos y selecciona al menos un ingrediente');
       return;
@@ -132,22 +133,52 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       image: productImage || undefined,
     };
 
-    if (editingProductId) {
-      dispatch(updateProduct({ id: editingProductId, ...productPayload }));
-      dispatch(updateRecipe({ productId: editingProductId, ...recipePayload }));
-    } else {
-      dispatch(addProduct({
-        product: productPayload,
-        recipe: recipePayload,
-      }));
-    }
+    try {
+      if (editingProductId) {
+        const response = await api.updateProduct(editingProductId, {
+          ...productPayload,
+          recipe: recipePayload,
+        });
+        const savedProduct = response?.data;
+        const savedRecipe = savedProduct?.recipeId && typeof savedProduct.recipeId === 'object'
+          ? savedProduct.recipeId
+          : recipePayload;
 
-    // Reset
-    setName('');
-    setPrice('');
-    setProductImage('');
-    setSelectedIngredients([]);
-    onClose();
+        dispatch(updateProduct({ id: editingProductId, ...productPayload, ...(savedProduct || {}) }));
+        dispatch(updateRecipe({ productId: editingProductId, ...savedRecipe, ...recipePayload }));
+      } else {
+        const response = await api.createProduct({
+          ...productPayload,
+          recipe: recipePayload,
+        });
+        const savedProduct = response?.data;
+        const savedProductId = entityId(savedProduct);
+        const savedRecipe = savedProduct?.recipeId && typeof savedProduct.recipeId === 'object'
+          ? savedProduct.recipeId
+          : recipePayload;
+
+        if (savedProduct && savedProductId) {
+          dispatch(addProduct({
+            product: savedProduct,
+            recipe: { ...savedRecipe, productId: savedProductId },
+          }));
+        } else {
+          dispatch(addProduct({
+            product: productPayload,
+            recipe: recipePayload,
+          }));
+        }
+      }
+
+      // Reset
+      setName('');
+      setPrice('');
+      setProductImage('');
+      setSelectedIngredients([]);
+      onClose();
+    } catch (error: any) {
+      Alert.alert('Error', error?.message || 'No se pudo guardar la receta');
+    }
   };
 
   const calculateCost = () => {
