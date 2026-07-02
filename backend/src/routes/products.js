@@ -96,32 +96,74 @@ router.post('/', protect, async (req, res) => {
 // @desc    Actualizar producto
 // @access  Private
 router.put('/:id', protect, async (req, res) => {
+  const session = await Product.startSession();
+  session.startTransaction();
+
   try {
+    const { recipe, ...productUpdates } = req.body;
+
     const product = await Product.findByIdAndUpdate(
       req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    ).populate('recipeId');
+      productUpdates,
+      { new: true, runValidators: true, session }
+    );
 
     if (!product) {
+      await session.abortTransaction();
       return res.status(404).json({
         success: false,
         message: 'Producto no encontrado'
       });
     }
 
-    req.app.get('io').emit('product:updated', product);
+    if (recipe) {
+      const recipeUpdates = {
+        ...recipe,
+        productId: product._id,
+        lastModified: new Date()
+      };
+
+      let updatedRecipe = null;
+      if (product.recipeId) {
+        updatedRecipe = await Recipe.findByIdAndUpdate(
+          product.recipeId,
+          recipeUpdates,
+          { new: true, runValidators: true, session }
+        );
+      }
+
+      if (!updatedRecipe) {
+        updatedRecipe = await Recipe.findOneAndUpdate(
+          { productId: product._id },
+          recipeUpdates,
+          { new: true, upsert: true, runValidators: true, session }
+        );
+      }
+
+      product.recipeId = updatedRecipe._id;
+      product.hasRecipe = true;
+      await product.save({ session });
+    }
+
+    await session.commitTransaction();
+
+    const populatedProduct = await Product.findById(product._id).populate('recipeId');
+
+    req.app.get('io').emit('product:updated', populatedProduct);
 
     res.json({
       success: true,
-      data: product
+      data: populatedProduct
     });
-    await logAuditEvent({ req, module: 'products', action: 'product.updated', metadata: { productId: product._id } });
+    await logAuditEvent({ req, module: 'products', action: 'product.updated', metadata: { productId: populatedProduct._id } });
   } catch (error) {
+    await session.abortTransaction();
     res.status(400).json({
       success: false,
       message: error.message
     });
+  } finally {
+    session.endSession();
   }
 });
 
