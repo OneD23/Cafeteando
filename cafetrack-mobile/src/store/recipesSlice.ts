@@ -11,6 +11,22 @@ export const fetchProducts = createAsyncThunk(
   }
 );
 
+export const deleteProductFromServer = createAsyncThunk(
+  'recipes/deleteProductFromServer',
+  async (id: string) => {
+    await api.deleteProduct(id);
+    return id;
+  }
+);
+
+export const updateProductActive = createAsyncThunk(
+  'recipes/updateProductActive',
+  async ({ id, isActive }: { id: string; isActive: boolean }) => {
+    const response = await api.updateProduct(id, { isActive });
+    return response.data;
+  }
+);
+
 interface RecipesState {
   products: Product[];
   recipes: Recipe[];
@@ -115,6 +131,11 @@ const initialState: RecipesState = {
 };
 
 const getEntityId = (entity: any) => String(entity?.id ?? entity?._id ?? '');
+const normalizeProduct = (product: any): Product => ({
+  ...product,
+  id: getEntityId(product),
+  recipeId: typeof product?.recipeId === 'object' ? getEntityId(product.recipeId) : String(product?.recipeId ?? ''),
+});
 
 const recipesSlice = createSlice({
   name: 'recipes',
@@ -193,11 +214,7 @@ const recipesSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        const products = (action.payload || []).map((p: any) => ({
-          ...p,
-          id: String(p.id ?? p._id),
-          recipeId: typeof p.recipeId === 'object' ? String(p.recipeId.id ?? p.recipeId._id) : String(p.recipeId ?? ''),
-        }));
+        const products = (action.payload || []).map(normalizeProduct);
 
         const recipes = (action.payload || [])
           .map((p: any) => {
@@ -216,6 +233,20 @@ const recipesSlice = createSlice({
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || 'No se pudieron cargar productos';
+      })
+      .addCase(deleteProductFromServer.fulfilled, (state, action) => {
+        const targetId = String(action.payload);
+        state.products = state.products.filter((p: any) => getEntityId(p) !== targetId);
+        state.recipes = state.recipes.filter((r: any) => String(r.productId) !== targetId);
+      })
+      .addCase(updateProductActive.fulfilled, (state, action) => {
+        const product = normalizeProduct(action.payload);
+        const index = state.products.findIndex((p: any) => getEntityId(p) === product.id);
+        if (index !== -1) {
+          state.products[index] = { ...state.products[index], ...product };
+        } else {
+          state.products.push(product);
+        }
       });
   },
 });

@@ -25,7 +25,7 @@ import {
   restockIngredient,
   adjustStock,
 } from '../store/inventorySlice';
-import { deleteProduct, toggleProductActive } from '../store/recipesSlice';
+import { deleteProductFromServer, updateProductActive } from '../store/recipesSlice';
 import { addJournalEntry } from '../store/accountingSlice';
 
 export const InventoryScreen: React.FC = () => {
@@ -216,9 +216,13 @@ export const InventoryScreen: React.FC = () => {
       return;
     }
 
-    const confirmDelete = () => {
-      dispatch(deleteProduct(productId));
-      Alert.alert('Eliminado', `${product.name} fue eliminado correctamente.`);
+    const confirmDelete = async () => {
+      try {
+        await dispatch(deleteProductFromServer(productId) as any).unwrap();
+        Alert.alert('Eliminado', `${product.name} fue eliminado correctamente.`);
+      } catch (error: any) {
+        Alert.alert('Error', error?.message || 'No se pudo eliminar el producto en el servidor.');
+      }
     };
 
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -235,7 +239,7 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const getRecipeForProduct = (productId: string) => {
-    return recipes.find((r: any) => r.productId === productId);
+    return recipes.find((r: any) => String(r.productId) === String(productId));
   };
 
   const filteredIngredients = ingredients.filter((i: any) =>
@@ -433,11 +437,17 @@ export const InventoryScreen: React.FC = () => {
           <TouchableOpacity 
             style={[styles.productActionBtn, !item.isActive && styles.inactiveBtn]}
             onPress={() => {
-              dispatch(toggleProductActive(productId));
-              Alert.alert(
-                'Estado actualizado',
-                item.isActive ? `${item.name} ahora está inactivo` : `${item.name} ahora está activo`
-              );
+              dispatch(updateProductActive({ id: productId, isActive: !item.isActive }) as any)
+                .unwrap()
+                .then(() => {
+                  Alert.alert(
+                    'Estado actualizado',
+                    item.isActive ? `${item.name} ahora está inactivo` : `${item.name} ahora está activo`
+                  );
+                })
+                .catch((error: any) => {
+                  Alert.alert('Error', error?.message || 'No se pudo actualizar el estado del producto.');
+                });
             }}
           >
             <Ionicons name={item.isActive ? 'eye' : 'eye-off'} size={18} color={item.isActive ? '#27ae60' : '#8b6f4e'} />

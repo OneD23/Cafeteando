@@ -1,10 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Alert } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import { logout } from "../store/authSlice";
 import { setTaxEnabled } from "../store/cartSlice";
-import { api } from "../api/client";
 import { pendingQueue, syncPendingData } from "../services/localDb";
 
 
@@ -12,10 +11,6 @@ const SettingsScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { user } = useSelector((state: any) => state.auth);
   const { taxEnabled } = useSelector((state: any) => state.cart);
-  const [showUsersModal, setShowUsersModal] = useState(false);
-  const [mode, setMode] = useState<"bootstrap" | "register">("register");
-  const [form, setForm] = useState({ username: "", email: "", name: "", password: "", role: "cashier" as "admin" | "manager" | "cashier" });
-  const [isSaving, setIsSaving] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
 
   const refreshPendingSync = async () => {
@@ -26,25 +21,6 @@ const SettingsScreen: React.FC = () => {
   React.useEffect(() => {
     refreshPendingSync();
   }, []);
-
-
-  const handleCreateUser = async () => {
-    if (!form.username || !form.email || !form.name || !form.password) {
-      Alert.alert("Datos incompletos", "Completa todos los campos.");
-      return;
-    }
-    try {
-      setIsSaving(true);
-      if (mode === "bootstrap") await api.bootstrapAdmin({ username: form.username, email: form.email, name: form.name, password: form.password });
-      else await api.registerUser(form);
-      Alert.alert("Éxito", "Usuario creado correctamente.");
-      setForm({ username: "", email: "", name: "", password: "", role: "cashier" });
-    } catch (error: any) {
-      Alert.alert("Error", error?.message || "No fue posible crear el usuario.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -76,22 +52,12 @@ const SettingsScreen: React.FC = () => {
         dispatch(logout());
       }}><Text style={styles.logoutText}>Cerrar Sesión</Text></TouchableOpacity>
 
-      <TouchableOpacity style={styles.usersButton} onPress={() => {
-        if (user?.role !== "admin") return Alert.alert("Acceso denegado", "Solo administradores pueden gestionar usuarios.");
-        setShowUsersModal(true);
-      }}>
-        <Text style={styles.usersButtonText}>Gestión de Usuarios</Text>
-      </TouchableOpacity>
-
-      <Modal visible={showUsersModal} transparent animationType="slide"><View style={styles.modalBackdrop}><View style={styles.modalCard}><Text style={styles.modalTitle}>Crear usuario</Text>
-        <View style={styles.switchRow}>{(["register", "bootstrap"] as const).map((m) => <TouchableOpacity key={m} style={[styles.modeBtn, mode === m && styles.modeBtnActive]} onPress={() => setMode(m)}><Text style={styles.modeText}>{m === "register" ? "Registro normal" : "Bootstrap admin"}</Text></TouchableOpacity>)}</View>
-        <TextInput style={styles.input} placeholder="Nombre" value={form.name} onChangeText={(name) => setForm((prev) => ({ ...prev, name }))} placeholderTextColor="#8b6f4e" />
-        <TextInput style={styles.input} placeholder="Usuario" value={form.username} onChangeText={(username) => setForm((prev) => ({ ...prev, username }))} autoCapitalize="none" placeholderTextColor="#8b6f4e" />
-        <TextInput style={styles.input} placeholder="Email" value={form.email} onChangeText={(email) => setForm((prev) => ({ ...prev, email }))} autoCapitalize="none" placeholderTextColor="#8b6f4e" />
-        <TextInput style={styles.input} placeholder="Contraseña" value={form.password} onChangeText={(password) => setForm((prev) => ({ ...prev, password }))} secureTextEntry placeholderTextColor="#8b6f4e" />
-        {mode === "register" && <View style={styles.roleRow}>{(["cashier", "manager", "admin"] as const).map((role) => <TouchableOpacity key={role} style={[styles.roleBtn, form.role === role && styles.roleBtnActive]} onPress={() => setForm((prev) => ({ ...prev, role }))}><Text style={styles.roleBtnText}>{role}</Text></TouchableOpacity>)}</View>}
-        <View style={styles.modalActions}><TouchableOpacity style={styles.secondaryBtn} onPress={() => setShowUsersModal(false)}><Text style={styles.secondaryBtnText}>Cerrar</Text></TouchableOpacity><TouchableOpacity style={styles.primaryBtn} onPress={handleCreateUser} disabled={isSaving}><Text style={styles.primaryBtnText}>{isSaving ? "Guardando..." : "Crear"}</Text></TouchableOpacity></View>
-      </View></View></Modal>
+      <View style={styles.optionCard}>
+        <View>
+          <Text style={styles.optionTitle}>Gestión de usuarios</Text>
+          <Text style={styles.optionSubtitle}>Usa la pestaña Usuarios para crear empleados y clientes.</Text>
+        </View>
+      </View>
     </SafeAreaView>
   );
 };

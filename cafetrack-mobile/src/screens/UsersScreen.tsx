@@ -26,7 +26,6 @@ const UsersScreen: React.FC = () => {
       setIsSaving(true);
       if (mode === 'bootstrap') await api.bootstrapAdmin({ username: form.username, email: form.email, name: form.name, password: form.password });
       else await api.registerUser(form);
-      await queueUnsynced('employee', { ...form, mode, unsynced: true });
       Alert.alert('Éxito', 'Usuario creado correctamente.');
       setForm({ username: '', email: '', name: '', password: '', role: 'cashier' });
     } catch (error: any) {
@@ -39,7 +38,14 @@ const UsersScreen: React.FC = () => {
       AsyncStorage.getItem('cafetrack_clients'),
       AsyncStorage.getItem('cafetrack_sales_history'),
     ]);
-    const parsedClients = raw ? JSON.parse(raw) : [];
+    let parsedClients = raw ? JSON.parse(raw) : [];
+    try {
+      const response = await api.getClients();
+      parsedClients = response?.data || parsedClients;
+      await AsyncStorage.setItem('cafetrack_clients', JSON.stringify(parsedClients));
+    } catch {
+      // Mantiene la copia local si no hay conexión.
+    }
     setClients(parsedClients);
     setSalesHistory(salesRaw ? JSON.parse(salesRaw) : []);
     if (parsedClients.length && !selectedClientId) {
@@ -59,12 +65,22 @@ const UsersScreen: React.FC = () => {
   const saveClient = async () => {
     if (!clientForm.name.trim()) return Alert.alert('Nombre requerido');
     const entity = { ...clientForm, id: clientForm.id || `cli-${Date.now()}` };
-    const next = [entity, ...clients.filter((c) => c.id !== entity.id)];
-    setClients(next);
-    setSelectedClientId(entity.id);
-    await AsyncStorage.setItem('cafetrack_clients', JSON.stringify(next));
-    await queueUnsynced('client', { ...entity, unsynced: true });
-    Alert.alert('Guardado', 'Cliente guardado correctamente.');
+    try {
+      const response = await api.upsertClient(entity);
+      const savedClient = response?.data || entity;
+      const next = [savedClient, ...clients.filter((c) => String(c.id) !== String(savedClient.id))];
+      setClients(next);
+      setSelectedClientId(savedClient.id);
+      await AsyncStorage.setItem('cafetrack_clients', JSON.stringify(next));
+      Alert.alert('Guardado', 'Cliente guardado correctamente en el servidor.');
+    } catch {
+      const next = [entity, ...clients.filter((c) => c.id !== entity.id)];
+      setClients(next);
+      setSelectedClientId(entity.id);
+      await AsyncStorage.setItem('cafetrack_clients', JSON.stringify(next));
+      await queueUnsynced('client', { ...entity, unsynced: true });
+      Alert.alert('Guardado local', 'Sin conexión: el cliente quedó pendiente de sincronización.');
+    }
   };
 
   const selectedClientInvoices = useMemo(() => {
