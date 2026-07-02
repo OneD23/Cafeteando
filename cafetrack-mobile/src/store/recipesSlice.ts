@@ -122,18 +122,18 @@ const recipesSlice = createSlice({
   reducers: {
     // Añadir nuevo producto con receta
     addProduct: (state, action: PayloadAction<{
-      product: Omit<Product, 'id' | 'recipeId'>;
-      recipe: Omit<Recipe, 'productId'>;
+      product: Partial<Product> & Omit<Product, 'id' | 'recipeId'>;
+      recipe: Partial<Recipe> & Omit<Recipe, 'productId'>;
     }>) => {
-      const productId = `prod-${Date.now()}`;
-      const recipeId = `rec-${Date.now()}`;
+      const productId = getEntityId(action.payload.product) || `prod-${Date.now()}`;
+      const recipeId = getEntityId(action.payload.product.recipeId) || String(action.payload.product.recipeId ?? `rec-${Date.now()}`);
       
       const newProduct: Product = {
         ...action.payload.product,
         id: productId,
         recipeId: recipeId,
         hasRecipe: true,
-      };
+      } as Product;
       
       const newRecipe: Recipe = {
         ...action.payload.recipe,
@@ -169,9 +169,11 @@ const recipesSlice = createSlice({
       preparationTime?: number;
       instructions?: string;
     }>) => {
-      const index = state.recipes.findIndex(r => r.productId === action.payload.productId);
+      const index = state.recipes.findIndex(r => String(r.productId) === String(action.payload.productId));
       if (index !== -1) {
         state.recipes[index] = { ...state.recipes[index], ...action.payload };
+      } else {
+        state.recipes.push(action.payload);
       }
     },
     
