@@ -157,6 +157,40 @@ async deductIngredients(recipeId: string, quantity: number, saleId: string) {
     });
   }
 
+  async updateProduct(id: string, product: any) {
+    return this.request(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(product),
+    });
+  }
+
+  async deleteProduct(id: string) {
+    return this.request(`/products/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getClients() {
+    return this.request('/clients');
+  }
+
+  async upsertClient(client: any) {
+    const id = String(client.id || client._id || '');
+    const isServerId = /^[0-9a-fA-F]{24}$/.test(id);
+
+    if (isServerId) {
+      return this.request(`/clients/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(client),
+      });
+    }
+
+    return this.request('/clients', {
+      method: 'POST',
+      body: JSON.stringify({ ...client, externalId: id || client.externalId }),
+    });
+  }
+
 
   async sendPromotion(payload: {
     client: { name: string; phone?: string; email?: string };

@@ -11,6 +11,22 @@ export const fetchProducts = createAsyncThunk(
   }
 );
 
+export const deleteProductFromServer = createAsyncThunk(
+  'recipes/deleteProductFromServer',
+  async (id: string) => {
+    await api.deleteProduct(id);
+    return id;
+  }
+);
+
+export const updateProductActive = createAsyncThunk(
+  'recipes/updateProductActive',
+  async ({ id, isActive }: { id: string; isActive: boolean }) => {
+    const response = await api.updateProduct(id, { isActive });
+    return response.data;
+  }
+);
+
 interface RecipesState {
   products: Product[];
   recipes: Recipe[];
@@ -115,6 +131,11 @@ const initialState: RecipesState = {
 };
 
 const getEntityId = (entity: any) => String(entity?.id ?? entity?._id ?? '');
+const normalizeProduct = (product: any): Product => ({
+  ...product,
+  id: getEntityId(product),
+  recipeId: typeof product?.recipeId === 'object' ? getEntityId(product.recipeId) : String(product?.recipeId ?? ''),
+});
 
 const recipesSlice = createSlice({
   name: 'recipes',
@@ -122,18 +143,18 @@ const recipesSlice = createSlice({
   reducers: {
     // Añadir nuevo producto con receta
     addProduct: (state, action: PayloadAction<{
-      product: Omit<Product, 'id' | 'recipeId'>;
-      recipe: Omit<Recipe, 'productId'>;
+      product: Partial<Product> & Omit<Product, 'id' | 'recipeId'>;
+      recipe: Partial<Recipe> & Omit<Recipe, 'productId'>;
     }>) => {
-      const productId = `prod-${Date.now()}`;
-      const recipeId = `rec-${Date.now()}`;
+      const productId = getEntityId(action.payload.product) || `prod-${Date.now()}`;
+      const recipeId = getEntityId(action.payload.product.recipeId) || String(action.payload.product.recipeId ?? `rec-${Date.now()}`);
       
       const newProduct: Product = {
         ...action.payload.product,
         id: productId,
         recipeId: recipeId,
         hasRecipe: true,
-      };
+      } as Product;
       
       const newRecipe: Recipe = {
         ...action.payload.recipe,
@@ -169,9 +190,11 @@ const recipesSlice = createSlice({
       preparationTime?: number;
       instructions?: string;
     }>) => {
-      const index = state.recipes.findIndex(r => r.productId === action.payload.productId);
+      const index = state.recipes.findIndex(r => String(r.productId) === String(action.payload.productId));
       if (index !== -1) {
         state.recipes[index] = { ...state.recipes[index], ...action.payload };
+      } else {
+        state.recipes.push(action.payload);
       }
     },
     
@@ -191,11 +214,7 @@ const recipesSlice = createSlice({
       })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false;
-        const products = (action.payload || []).map((p: any) => ({
-          ...p,
-          id: String(p.id ?? p._id),
-          recipeId: typeof p.recipeId === 'object' ? String(p.recipeId.id ?? p.recipeId._id) : String(p.recipeId ?? ''),
-        }));
+        const products = (action.payload || []).map(normalizeProduct);
 
         const recipes = (action.payload || [])
           .map((p: any) => {
@@ -214,6 +233,20 @@ const recipesSlice = createSlice({
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || 'No se pudieron cargar productos';
+      })
+      .addCase(deleteProductFromServer.fulfilled, (state, action) => {
+        const targetId = String(action.payload);
+        state.products = state.products.filter((p: any) => getEntityId(p) !== targetId);
+        state.recipes = state.recipes.filter((r: any) => String(r.productId) !== targetId);
+      })
+      .addCase(updateProductActive.fulfilled, (state, action) => {
+        const product = normalizeProduct(action.payload);
+        const index = state.products.findIndex((p: any) => getEntityId(p) === product.id);
+        if (index !== -1) {
+          state.products[index] = { ...state.products[index], ...product };
+        } else {
+          state.products.push(product);
+        }
       });
   },
 });

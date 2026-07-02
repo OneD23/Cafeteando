@@ -31,8 +31,17 @@ export const syncPendingData = async () => {
         const payload = { ...row.payload };
         if (!payload.customer && payload.customerName) payload.customer = { name: payload.customerName };
         await api.createSale(payload);
+      } else if (row.entity === 'client') {
+        await api.upsertClient(row.payload);
+      } else if (row.entity === 'employee') {
+        // Las altas de empleados se hacen directamente contra el API;
+        // entradas antiguas en cola se consideran ya atendidas para no bloquear logout.
+      } else {
+        row.error = `Entidad no soportada: ${row.entity}`;
+        continue;
       }
       row.synced = 1;
+      row.error = null;
     } catch {
       break;
     }
