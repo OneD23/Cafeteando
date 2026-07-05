@@ -32,6 +32,16 @@ const normalizeText = (value: unknown) =>
 
 const entityId = (entity: any) => String(entity?.id ?? entity?._id ?? "");
 
+const recipeIngredientId = (recipeItem: any) => {
+  const ingredientRef = recipeItem?.ingredientId ?? recipeItem?.ingredient;
+  return typeof ingredientRef === "object" ? entityId(ingredientRef) : String(ingredientRef ?? "");
+};
+
+const recipeIngredientName = (recipeItem: any) => {
+  const ingredientRef = recipeItem?.ingredientId ?? recipeItem?.ingredient;
+  return typeof ingredientRef === "object" ? ingredientRef?.name : undefined;
+};
+
 const roundQuantity = (value: number) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -92,20 +102,22 @@ const POSScreen: React.FC = () => {
       }
 
       const missingIngredients: Array<{ name: string; missing: number; unit?: string }> = [];
-      const maxFromIngredients = recipe.items.reduce((minQty: number, ri: any) => {
-        const ingredient = ingredients.find((ing: any) => entityId(ing) === String(ri.ingredientId));
+      const validRecipeItems = Array.isArray(recipe.items) ? recipe.items : [];
+      const maxFromIngredients = validRecipeItems.reduce((minQty: number, ri: any) => {
+        const ingredientId = recipeIngredientId(ri);
+        const ingredient = ingredients.find((ing: any) => entityId(ing) === ingredientId);
         const requiredQuantity = Number(ri.quantity || 0);
 
-        if (requiredQuantity <= 0) {
+        if (!ingredientId || requiredQuantity <= 0) {
           return minQty;
         }
 
         if (!ingredient) {
           missingIngredients.push({
-            name: `Ingrediente ${ri.ingredientId}`,
+            name: recipeIngredientName(ri) || "ingrediente eliminado o no registrado",
             missing: requiredQuantity,
           });
-          return 0;
+          return minQty;
         }
 
         const stock = Number(ingredient.stock || 0);
@@ -124,7 +136,7 @@ const POSScreen: React.FC = () => {
 
       return {
         ...product,
-        stock: Number.isFinite(maxFromIngredients) ? maxFromIngredients : 0,
+        stock: maxFromIngredients === Number.MAX_SAFE_INTEGER ? 9999 : Number.isFinite(maxFromIngredients) ? maxFromIngredients : 0,
         missingIngredients,
       };
     });
@@ -146,17 +158,27 @@ const POSScreen: React.FC = () => {
     });
   }, [availableProducts, selectedCategory, searchQuery]);
 
+  const addProductToCart = (product: any, allowIncompleteRecipe = false) => {
+    dispatch(addToCart({ ...product, allowIncompleteRecipe }));
+  };
+
   const handleAddToCart = (product: any) => {
-    if (product.stock <= 0) {
-      const missingMessage = product.missingIngredients?.length
-        ? product.missingIngredients
-            .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
-            .join("\n")
-        : "Producto agotado";
-      Alert.alert("Ingredientes insuficientes", missingMessage);
+    if (hasInventoryData && product.missingIngredients?.length) {
+      const missingMessage = product.missingIngredients
+        .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
+        .join("\n");
+      Alert.alert(
+        "Producto incompleto",
+        `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Sí, continuar", onPress: () => addProductToCart(product, true) },
+        ]
+      );
       return;
     }
-    dispatch(addToCart(product));
+
+    addProductToCart(product);
   };
 
   const handleCompleteSale = async () => {
@@ -372,7 +394,7 @@ const POSScreen: React.FC = () => {
             </View>
             <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
             <Text style={styles.availabilityText}>Disponible: {hasInventoryData ? item.stock : '—'}</Text>
-            {hasInventoryData && item.stock <= 0 && item.missingIngredients?.length > 0 && (
+            {hasInventoryData && item.missingIngredients?.length > 0 && (
               <Text style={styles.missingIngredientsText} numberOfLines={2}>
                 {item.missingIngredients
                   .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)

@@ -3,6 +3,13 @@ import { consumeIngredients } from './inventorySlice';
 import { recordSale } from './accountingSlice';
 import { queueUnsynced } from '../services/localDb';
 
+const entityId = (entity: any) => String(entity?.id ?? entity?._id ?? '');
+
+const recipeIngredientId = (recipeItem: any) => {
+  const ingredientRef = recipeItem?.ingredientId ?? recipeItem?.ingredient;
+  return typeof ingredientRef === 'object' ? entityId(ingredientRef) : String(ingredientRef ?? '');
+};
+
 export interface CartItem {
   id: string;
   name: string;
@@ -13,6 +20,7 @@ export interface CartItem {
   stock: number;
   hasRecipe: boolean;
   recipeId?: string;
+  allowIncompleteRecipe?: boolean;
 }
 
 interface CartState {
@@ -58,8 +66,8 @@ export const processSale = createAsyncThunk(
   async (payload: { paymentMethod: string; customerName?: string }, { getState, dispatch }) => {
     const state = getState() as {
       cart: CartState;
-      recipes: { recipes: Array<{ productId: string; items: Array<{ ingredientId: string; quantity: number }> }> };
-      inventory: { ingredients: Array<{ id: string; stock: number; name: string; costPerUnit?: number }> };
+      recipes: { recipes: Array<{ productId: string; items: Array<{ ingredientId: string | any; ingredient?: string | any; quantity: number }> }> };
+      inventory: { ingredients: Array<{ id: string; _id?: string; stock: number; name: string; costPerUnit?: number }> };
     };
     const { items } = state.cart;
     const saleId = `SALE-${Date.now()}`;
@@ -68,14 +76,18 @@ export const processSale = createAsyncThunk(
     // Verificar stock de ingredientes para todos los items
     for (const item of items) {
       if (item.hasRecipe) {
-        const recipe = state.recipes.recipes.find((r) => r.productId === item.id);
+        const recipe = state.recipes.recipes.find((r) => String(r.productId) === entityId(item));
         if (!recipe) continue;
 
         for (const recipeItem of recipe.items) {
-          const ingredient = state.inventory.ingredients.find((ing) => ing.id === recipeItem.ingredientId);
+          const ingredientId = recipeIngredientId(recipeItem);
+          if (!ingredientId || recipeItem.quantity <= 0) continue;
+
+          const ingredient = state.inventory.ingredients.find((ing) => entityId(ing) === ingredientId);
           const needed = recipeItem.quantity * item.quantity;
 
           if (!ingredient || ingredient.stock < needed) {
+            if (item.allowIncompleteRecipe) continue;
             throw new Error(`No hay suficiente stock para: ${item.name}`);
           }
 
@@ -83,7 +95,9 @@ export const processSale = createAsyncThunk(
         }
 
         dispatch(consumeIngredients({
-          recipeItems: recipe.items,
+          recipeItems: recipe.items
+            .map((recipeItem) => ({ ...recipeItem, ingredientId: recipeIngredientId(recipeItem) }))
+            .filter((recipeItem) => recipeItem.ingredientId && recipeItem.quantity > 0),
           quantity: item.quantity,
           saleId,
           productName: item.name,
@@ -117,13 +131,14 @@ const cartSlice = createSlice({
   initialState,
   reducers: {
     addToCart: (state, action: PayloadAction<any>) => {
-      const existing = state.items.find((item: any) => item.id === action.payload.id);
+      const productId = entityId(action.payload);
+      const existing = state.items.find((item: any) => entityId(item) === productId);
       if (existing) {
-        if (existing.quantity < existing.stock) {
+        if (existing.allowIncompleteRecipe || existing.quantity < existing.stock) {
           existing.quantity += 1;
         }
       } else {
-        state.items.push({ ...action.payload, quantity: 1 });
+        state.items.push({ ...action.payload, id: productId, quantity: 1 });
       }
       state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
