@@ -23,6 +23,15 @@ import api from "../api/client";
 
 const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
+const normalizeText = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const entityId = (entity: any) => String(entity?.id ?? entity?._id ?? "");
+
 const POSScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { items: cartItems, totals, processingSale } = useSelector((state: any) => state.cart);
@@ -66,7 +75,8 @@ const POSScreen: React.FC = () => {
 
   const availableProducts = useMemo(() => {
     return products.map((product: any) => {
-      const recipe = recipes.find((r: any) => r.productId === product.id);
+      const productId = entityId(product);
+      const recipe = recipes.find((r: any) => String(r.productId) === productId);
       if (!recipe) {
         return { ...product, stock: 9999 };
       }
@@ -89,13 +99,20 @@ const POSScreen: React.FC = () => {
   }, [products, recipes, ingredients, hasInventoryData]);
 
   const filteredProducts = useMemo(() => {
+    const normalizedSearch = normalizeText(searchQuery);
+
     return availableProducts.filter((p: any) => {
-      const matchesCategory = selectedCategory === "all" || p.category === selectedCategory;
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const hasStock = hasInventoryData ? p.stock > 0 : true;
-      return p.isActive && matchesCategory && matchesSearch && hasStock;
+      const matchesCategory = selectedCategory === "all" || String(p.category) === selectedCategory;
+      const searchableText = [p.name, p.category, p.sku, p.description].map(normalizeText).join(" ");
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const isActive = p.isActive !== false;
+
+      // Cuando el usuario busca, no restringimos por categoría para evitar ocultar
+      // resultados válidos que estén en otra pestaña de categoría. Tampoco ocultamos
+      // productos sin stock: se muestran como agotados y se bloquea su venta al tocar.
+      return isActive && matchesSearch && (normalizedSearch ? true : matchesCategory);
     });
-  }, [availableProducts, selectedCategory, searchQuery, hasInventoryData]);
+  }, [availableProducts, selectedCategory, searchQuery]);
 
   const handleAddToCart = (product: any) => {
     if (product.stock <= 0) {
@@ -292,7 +309,7 @@ const POSScreen: React.FC = () => {
         data={filteredProducts}
         key={`products-${productColumns}`}
         numColumns={productColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => entityId(item)}
         contentContainerStyle={[styles.productsGrid, { paddingBottom: cartItems.length > 0 ? (cartCollapsed ? 120 : 380) : 24 }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
