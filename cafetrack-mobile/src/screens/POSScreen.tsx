@@ -23,6 +23,31 @@ import api from "../api/client";
 
 const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
+const normalizeText = (value: unknown) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+
+const entityId = (entity: any) => String(entity?.id ?? entity?._id ?? "");
+
+const recipeIngredientId = (recipeItem: any) => {
+  const ingredientRef = recipeItem?.ingredientId ?? recipeItem?.ingredient;
+  return typeof ingredientRef === "object" ? entityId(ingredientRef) : String(ingredientRef ?? "");
+};
+
+const recipeIngredientName = (recipeItem: any) => {
+  const ingredientRef = recipeItem?.ingredientId ?? recipeItem?.ingredient;
+  return typeof ingredientRef === "object" ? ingredientRef?.name : undefined;
+};
+
+const roundQuantity = (value: number) =>
+  Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+const formatIngredientQuantity = (quantity: number, unit?: string) =>
+  `${roundQuantity(quantity)} ${unit || "und."}`;
+
 const POSScreen: React.FC = () => {
   const dispatch = useDispatch();
   const { items: cartItems, totals, processingSale } = useSelector((state: any) => state.cart);
@@ -66,43 +91,90 @@ const POSScreen: React.FC = () => {
 
   const availableProducts = useMemo(() => {
     return products.map((product: any) => {
-      const recipe = recipes.find((r: any) => r.productId === product.id);
+      const productId = entityId(product);
+      const recipe = recipes.find((r: any) => String(r.productId) === productId);
       if (!recipe) {
-        return { ...product, stock: 9999 };
+        return { ...product, stock: 9999, missingIngredients: [] };
       }
 
       if (!hasInventoryData) {
-        return { ...product, stock: 9999 };
+        return { ...product, stock: 9999, missingIngredients: [] };
       }
 
-      const maxFromIngredients = recipe.items.reduce((minQty: number, ri: any) => {
-        const ingredient = ingredients.find((ing: any) => ing.id === ri.ingredientId);
-        const possible = ingredient ? Math.floor(ingredient.stock / ri.quantity) : 0;
+      const missingIngredients: Array<{ name: string; missing: number; unit?: string }> = [];
+      const validRecipeItems = Array.isArray(recipe.items) ? recipe.items : [];
+      const maxFromIngredients = validRecipeItems.reduce((minQty: number, ri: any) => {
+        const ingredientId = recipeIngredientId(ri);
+        const ingredient = ingredients.find((ing: any) => entityId(ing) === ingredientId);
+        const requiredQuantity = Number(ri.quantity || 0);
+
+        if (!ingredientId || requiredQuantity <= 0) {
+          return minQty;
+        }
+
+        if (!ingredient) {
+          return minQty;
+        }
+
+        const stock = Number(ingredient.stock || 0);
+        const possible = Math.floor(stock / requiredQuantity);
+
+        if (stock < requiredQuantity) {
+          missingIngredients.push({
+            name: ingredient.name || "Ingrediente",
+            missing: requiredQuantity - stock,
+            unit: ingredient.unit,
+          });
+        }
+
         return Math.min(minQty, possible);
       }, Number.MAX_SAFE_INTEGER);
 
       return {
         ...product,
-        stock: Number.isFinite(maxFromIngredients) ? maxFromIngredients : 0,
+        stock: maxFromIngredients === Number.MAX_SAFE_INTEGER ? 9999 : Number.isFinite(maxFromIngredients) ? maxFromIngredients : 0,
+        missingIngredients,
       };
     });
   }, [products, recipes, ingredients, hasInventoryData]);
 
   const filteredProducts = useMemo(() => {
+    const normalizedSearch = normalizeText(searchQuery);
+
     return availableProducts.filter((p: any) => {
-      const matchesCategory = selectedCategory === "all" || p.category === selectedCategory;
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const hasStock = hasInventoryData ? p.stock > 0 : true;
-      return p.isActive && matchesCategory && matchesSearch && hasStock;
+      const matchesCategory = selectedCategory === "all" || String(p.category) === selectedCategory;
+      const searchableText = [p.name, p.category, p.sku, p.description].map(normalizeText).join(" ");
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const isActive = p.isActive !== false;
+
+      // Cuando el usuario busca, no restringimos por categoría para evitar ocultar
+      // resultados válidos que estén en otra pestaña de categoría. Tampoco ocultamos
+      // productos sin stock: se muestran como agotados y se bloquea su venta al tocar.
+      return isActive && matchesSearch && (normalizedSearch ? true : matchesCategory);
     });
-  }, [availableProducts, selectedCategory, searchQuery, hasInventoryData]);
+  }, [availableProducts, selectedCategory, searchQuery]);
+
+  const addProductToCart = (product: any, allowIncompleteRecipe = false) => {
+    dispatch(addToCart({ ...product, allowIncompleteRecipe }));
+  };
 
   const handleAddToCart = (product: any) => {
-    if (product.stock <= 0) {
-      Alert.alert("Sin Stock", "Producto agotado");
+    if (hasInventoryData && product.missingIngredients?.length) {
+      const missingMessage = product.missingIngredients
+        .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
+        .join("\n");
+      Alert.alert(
+        "Producto incompleto",
+        `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Sí, continuar", onPress: () => addProductToCart(product, true) },
+        ]
+      );
       return;
     }
-    dispatch(addToCart(product));
+
+    addProductToCart(product);
   };
 
   const handleCompleteSale = async () => {
@@ -292,7 +364,7 @@ const POSScreen: React.FC = () => {
         data={filteredProducts}
         key={`products-${productColumns}`}
         numColumns={productColumns}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => entityId(item)}
         contentContainerStyle={[styles.productsGrid, { paddingBottom: cartItems.length > 0 ? (cartCollapsed ? 120 : 380) : 24 }]}
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -317,6 +389,14 @@ const POSScreen: React.FC = () => {
               </View>
             </View>
             <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+            <Text style={styles.availabilityText}>Disponible: {hasInventoryData ? item.stock : '—'}</Text>
+            {hasInventoryData && item.missingIngredients?.length > 0 && (
+              <Text style={styles.missingIngredientsText} numberOfLines={2}>
+                {item.missingIngredients
+                  .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
+                  .join(' · ')}
+              </Text>
+            )}
             <View style={styles.productBottomRow}>
               <Text style={styles.productPrice}>${item.price.toFixed(2)}</Text>
               <View style={styles.addCircle}>
@@ -624,6 +704,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "800",
     minHeight: 34,
+  },
+  availabilityText: {
+    color: "#d8c6b2",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  missingIngredientsText: {
+    color: "#f97066",
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 4,
   },
   productBottomRow: {
     marginTop: 10,

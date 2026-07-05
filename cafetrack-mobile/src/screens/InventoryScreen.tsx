@@ -252,14 +252,21 @@ export const InventoryScreen: React.FC = () => {
 
   const componentOptions = ingredients.filter((ingredient: any) => entityId(ingredient) !== (editingIngredient ? entityId(editingIngredient) : ''));
 
+  const recipeIngredientId = (component: any) => {
+    const ingredientRef = component?.ingredientId ?? component?.ingredient;
+    return typeof ingredientRef === 'object' ? entityId(ingredientRef) : String(ingredientRef ?? '');
+  };
+
   const componentDisplayName = (component: any) => {
-    const componentId = String(component?.ingredientId?.id || component?.ingredientId?._id || component?.ingredientId || '');
-    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.name || component?.ingredientId?.name || 'Ingrediente';
+    const componentId = recipeIngredientId(component);
+    const ingredientRef = component?.ingredientId ?? component?.ingredient;
+    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.name || ingredientRef?.name || '';
   };
 
   const componentDisplayUnit = (component: any) => {
-    const componentId = String(component?.ingredientId?.id || component?.ingredientId?._id || component?.ingredientId || '');
-    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.unit || component?.ingredientId?.unit || '';
+    const componentId = recipeIngredientId(component);
+    const ingredientRef = component?.ingredientId ?? component?.ingredient;
+    return ingredients.find((ingredient: any) => entityId(ingredient) === componentId)?.unit || ingredientRef?.unit || '';
   };
 
   const normalizeComponentsForForm = (components: any[] = []) => components.map((component) => ({
@@ -382,7 +389,8 @@ export const InventoryScreen: React.FC = () => {
     const productId = entityId(item);
     const recipe = getRecipeForProduct(productId);
     const totalCost = recipe?.items.reduce((sum: number, ri: any) => {
-      const ing = ingredients.find((i: any) => i.id === ri.ingredientId);
+      const ingredientId = recipeIngredientId(ri);
+      const ing = ingredients.find((i: any) => entityId(i) === ingredientId);
       return sum + (ing?.costPerUnit || 0) * ri.quantity;
     }, 0) || 0;
 
@@ -409,10 +417,12 @@ export const InventoryScreen: React.FC = () => {
             <Text style={styles.recipeTitle}>📝 Receta ({recipe.preparationTime} min):</Text>
             {recipe.image ? <Image source={{ uri: recipe.image }} style={styles.recipeImage} /> : null}
             {recipe.items.map((ri: any, idx: number) => {
-              const ing = ingredients.find((i: any) => i.id === ri.ingredientId);
+              const ingredientName = componentDisplayName(ri);
+              if (!ingredientName || ri.quantity <= 0) return null;
+
               return (
                 <Text key={idx} style={styles.recipeItem}>
-                  • {ing?.name}: {ri.quantity} {ing?.unit}
+                  • {ingredientName}: {ri.quantity} {componentDisplayUnit(ri)}
                 </Text>
               );
             })}
