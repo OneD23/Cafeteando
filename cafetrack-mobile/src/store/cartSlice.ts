@@ -86,7 +86,9 @@ export const processSale = createAsyncThunk(
           const ingredient = state.inventory.ingredients.find((ing) => entityId(ing) === ingredientId);
           const needed = recipeItem.quantity * item.quantity;
 
-          if (!ingredient || ingredient.stock < needed) {
+          if (!ingredient) continue;
+
+          if (ingredient.stock < needed) {
             if (item.allowIncompleteRecipe) continue;
             throw new Error(`No hay suficiente stock para: ${item.name}`);
           }

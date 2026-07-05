@@ -113,10 +113,6 @@ const POSScreen: React.FC = () => {
         }
 
         if (!ingredient) {
-          missingIngredients.push({
-            name: recipeIngredientName(ri) || "ingrediente eliminado o no registrado",
-            missing: requiredQuantity,
-          });
           return minQty;
         }
 
