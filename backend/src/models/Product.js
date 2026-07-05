@@ -1,5 +1,32 @@
 const mongoose = require('mongoose');
 
+
+const productOptionValueSchema = new mongoose.Schema({
+  label: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  priceDelta: {
+    type: Number,
+    default: 0,
+    min: 0
+  }
+}, { _id: false });
+
+const productOptionGroupSchema = new mongoose.Schema({
+  name: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  required: {
+    type: Boolean,
+    default: false
+  },
+  values: [productOptionValueSchema]
+}, { _id: false });
+
 const productSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -28,6 +55,7 @@ const productSchema = new mongoose.Schema({
     default: '☕'
   },
   image: String,
+  options: [productOptionGroupSchema],
   isActive: {
     type: Boolean,
     default: true

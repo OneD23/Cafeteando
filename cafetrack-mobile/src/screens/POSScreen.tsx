@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   Modal,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -42,6 +43,9 @@ const recipeIngredientName = (recipeItem: any) => {
   return typeof ingredientRef === "object" ? ingredientRef?.name : undefined;
 };
 
+const optionKey = (options: Array<{ groupName: string; valueLabel: string; priceDelta: number }> = []) =>
+  options.map((option) => `${option.groupName}:${option.valueLabel}`).join('|');
+
 const roundQuantity = (value: number) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -64,6 +68,8 @@ const POSScreen: React.FC = () => {
   const [cashExpected, setCashExpected] = useState(0);
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
+  const [optionProduct, setOptionProduct] = useState<any>(null);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({});
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -154,8 +160,50 @@ const POSScreen: React.FC = () => {
     });
   }, [availableProducts, selectedCategory, searchQuery]);
 
-  const addProductToCart = (product: any, allowIncompleteRecipe = false) => {
-    dispatch(addToCart({ ...product, allowIncompleteRecipe }));
+  const addProductToCart = (product: any, allowIncompleteRecipe = false, options: Array<{ groupName: string; valueLabel: string; priceDelta: number }> = []) => {
+    const unitPrice = Number(product.price || 0) + options.reduce((sum, option) => sum + Number(option.priceDelta || 0), 0);
+    dispatch(addToCart({
+      ...product,
+      allowIncompleteRecipe,
+      basePrice: product.price,
+      price: unitPrice,
+      selectedOptions: options,
+      cartKey: `${entityId(product)}::${optionKey(options)}`,
+    }));
+  };
+
+  const openOptionsForProduct = (product: any, allowIncompleteRecipe = false) => {
+    const groups = Array.isArray(product.options) ? product.options.filter((group: any) => Array.isArray(group.values) && group.values.length > 0) : [];
+    if (!groups.length) {
+      addProductToCart(product, allowIncompleteRecipe);
+      return;
+    }
+
+    const defaults = groups.reduce((acc: Record<string, any>, group: any) => {
+      if (group.required && group.values[0]) acc[group.name] = group.values[0];
+      return acc;
+    }, {});
+    setSelectedOptions(defaults);
+    setOptionProduct({ ...product, allowIncompleteRecipe });
+  };
+
+  const confirmProductOptions = () => {
+    if (!optionProduct) return;
+    const groups = Array.isArray(optionProduct.options) ? optionProduct.options : [];
+    const missingRequired = groups.find((group: any) => group.required && !selectedOptions[group.name]);
+    if (missingRequired) {
+      Alert.alert('Elige una opción', `Selecciona ${missingRequired.name} para continuar.`);
+      return;
+    }
+
+    const options = Object.entries(selectedOptions).map(([groupName, value]: any) => ({
+      groupName,
+      valueLabel: value.label,
+      priceDelta: Number(value.priceDelta || 0),
+    }));
+    addProductToCart(optionProduct, optionProduct.allowIncompleteRecipe, options);
+    setOptionProduct(null);
+    setSelectedOptions({});
   };
 
   const handleAddToCart = (product: any) => {
@@ -168,13 +216,13 @@ const POSScreen: React.FC = () => {
         `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
         [
           { text: "Cancelar", style: "cancel" },
-          { text: "Sí, continuar", onPress: () => addProductToCart(product, true) },
+          { text: "Sí, continuar", onPress: () => openOptionsForProduct(product, true) },
         ]
       );
       return;
     }
 
-    addProductToCart(product);
+    openOptionsForProduct(product);
   };
 
   const handleCompleteSale = async () => {
@@ -214,7 +262,7 @@ const POSScreen: React.FC = () => {
         saleId: result.saleId,
         customerName: paymentData.customer?.name,
         total: saleTotals.total,
-        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price, selectedOptions: i.selectedOptions || [] })),
         date: new Date().toISOString(),
       });
       Alert.alert("Venta completada", "Se descontaron ingredientes del inventario.");
@@ -240,7 +288,7 @@ const POSScreen: React.FC = () => {
         .map(
           (item: any) => `
             <tr>
-              <td>${item.name}</td>
+              <td>${item.name}${item.selectedOptions?.length ? `<br/><small>${item.selectedOptions.map((option: any) => `${option.groupName}: ${option.valueLabel}`).join(' · ')}</small>` : ''}</td>
               <td>${item.quantity}</td>
               <td>$${item.price.toFixed(2)}</td>
               <td>$${(item.price * item.quantity).toFixed(2)}</td>
@@ -421,24 +469,29 @@ const POSScreen: React.FC = () => {
           {!cartCollapsed && (
             <FlatList
               data={cartItems}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item: any) => item.cartKey || item.id}
               style={styles.cartList}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }: any) => (
             <View key={item.id} style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
                 <Text style={styles.cartItemName}>{item.name}</Text>
+                {item.selectedOptions?.length > 0 && (
+                  <Text style={styles.cartItemOptions}>
+                    {item.selectedOptions.map((option: any) => `${option.groupName}: ${option.valueLabel}`).join(' · ')}
+                  </Text>
+                )}
                 <View style={styles.qtyRow}>
                   <TouchableOpacity
                     style={styles.qtyBtn}
-                    onPress={() => dispatch(updateQuantity({ id: item.id, qty: item.quantity - 1 }))}
+                    onPress={() => dispatch(updateQuantity({ id: item.cartKey || item.id, qty: item.quantity - 1 }))}
                   >
                     <Text style={styles.qtyBtnText}>-</Text>
                   </TouchableOpacity>
                   <Text style={styles.qtyValue}>{item.quantity}</Text>
                   <TouchableOpacity
                     style={styles.qtyBtn}
-                    onPress={() => dispatch(updateQuantity({ id: item.id, qty: item.quantity + 1 }))}
+                    onPress={() => dispatch(updateQuantity({ id: item.cartKey || item.id, qty: item.quantity + 1 }))}
                   >
                     <Text style={styles.qtyBtnText}>+</Text>
                   </TouchableOpacity>
@@ -446,7 +499,7 @@ const POSScreen: React.FC = () => {
               </View>
               <View style={styles.cartItemRight}>
                 <Text style={styles.cartItemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
-                <TouchableOpacity onPress={() => dispatch(removeFromCart(item.id))}>
+                <TouchableOpacity onPress={() => dispatch(removeFromCart(item.cartKey || item.id))}>
                   <Ionicons name="trash-outline" size={18} color="#d96d61" />
                 </TouchableOpacity>
               </View>
@@ -466,6 +519,46 @@ const POSScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={!!optionProduct} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.cartTitle}>{optionProduct?.name}</Text>
+            <Text style={styles.optionModalSubtitle}>Configura las opciones antes de agregar al carrito.</Text>
+            <ScrollView style={styles.optionModalList}>
+              {(optionProduct?.options || []).map((group: any) => (
+                <View key={group.name} style={styles.optionModalGroup}>
+                  <Text style={styles.optionModalGroupTitle}>{group.name}{group.required ? ' *' : ''}</Text>
+                  <View style={styles.optionChoicesRow}>
+                    {group.values.map((value: any) => {
+                      const selected = selectedOptions[group.name]?.label === value.label;
+                      return (
+                        <TouchableOpacity
+                          key={`${group.name}-${value.label}`}
+                          style={[styles.optionChoice, selected && styles.optionChoiceActive]}
+                          onPress={() => setSelectedOptions((prev) => ({ ...prev, [group.name]: value }))}
+                        >
+                          <Text style={[styles.optionChoiceText, selected && styles.optionChoiceTextActive]}>{value.label}</Text>
+                          <Text style={[styles.optionChoicePrice, selected && styles.optionChoiceTextActive]}>+${Number(value.priceDelta || 0).toFixed(2)}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {!group.required && selectedOptions[group.name] && (
+                    <TouchableOpacity onPress={() => setSelectedOptions((prev) => { const next = { ...prev }; delete next[group.name]; return next; })}>
+                      <Text style={styles.clearOptionText}>Quitar {group.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.checkoutButton} onPress={confirmProductOptions}>
+              <Text style={styles.checkoutText}>Agregar por ${((optionProduct?.price || 0) + Object.values(selectedOptions).reduce((sum: number, value: any) => sum + Number(value.priceDelta || 0), 0)).toFixed(2)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setOptionProduct(null)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <PaymentModal
         visible={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
@@ -853,6 +946,63 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '700',
+  },
+
+  optionModalSubtitle: {
+    color: '#8b6f4e',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  optionModalList: {
+    maxHeight: 360,
+  },
+  optionModalGroup: {
+    marginBottom: 16,
+  },
+  optionModalGroupTitle: {
+    color: '#d4a574',
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  optionChoicesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionChoice: {
+    backgroundColor: '#2c1810',
+    borderColor: '#4a3428',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minWidth: 110,
+  },
+  optionChoiceActive: {
+    backgroundColor: '#d4a574',
+    borderColor: '#d4a574',
+  },
+  optionChoiceText: {
+    color: '#f5f1e8',
+    fontWeight: '800',
+  },
+  optionChoiceTextActive: {
+    color: '#1a0f0a',
+  },
+  optionChoicePrice: {
+    color: '#8b6f4e',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  clearOptionText: {
+    color: '#d96d61',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  cartItemOptions: {
+    color: '#d4a574',
+    fontSize: 11,
+    marginTop: 3,
   },
   cashExpectedText: {
     color: '#d4a574',

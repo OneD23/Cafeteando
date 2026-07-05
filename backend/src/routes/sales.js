@@ -20,6 +20,24 @@ const toAccountingDate = (value = new Date()) => new Date(value).toISOString().s
 const normalizePaymentMethod = (method) => ['cash', 'card', 'transfer', 'mixed'].includes(String(method || '').toLowerCase()) ? String(method).toLowerCase() : 'cash';
 const loadIngredientById = (session = null) => async (id) => Ingredient.findById(id).session(session);
 
+const normalizeSelectedOptions = (product, selectedOptions = []) => {
+  const groups = Array.isArray(product.options) ? product.options : [];
+  const selections = Array.isArray(selectedOptions) ? selectedOptions : [];
+
+  return selections.map((selection) => {
+    const group = groups.find((candidate) => String(candidate.name) === String(selection.groupName));
+    const value = group?.values?.find((candidate) => String(candidate.label) === String(selection.valueLabel));
+    return {
+      groupName: String(group?.name || selection.groupName || '').trim(),
+      valueLabel: String(value?.label || selection.valueLabel || '').trim(),
+      priceDelta: roundMoney(value ? value.priceDelta : selection.priceDelta || 0),
+    };
+  }).filter((selection) => selection.groupName && selection.valueLabel);
+};
+
+const calculateUnitPrice = (product, selectedOptions = []) =>
+  roundMoney((product.price || 0) + selectedOptions.reduce((sum, option) => sum + Number(option.priceDelta || 0), 0));
+
 const recoverAccountingCashFromLegacyState = async (userId, session) => {
   const legacyCashState = await CashSessionState.findOne({ key: 'default', isOpen: true }).session(session);
   if (!legacyCashState) return null;
@@ -126,14 +144,18 @@ router.post('/', protect, async (req, res) => {
 
       itemCost = roundMoney(itemCost);
 
-      const itemTotal = roundMoney(product.price * item.quantity);
+      const selectedOptions = normalizeSelectedOptions(product, item.selectedOptions);
+      const unitPrice = calculateUnitPrice(product, selectedOptions);
+      const itemTotal = roundMoney(unitPrice * item.quantity);
       subtotal = roundMoney(subtotal + itemTotal);
       totalCost = roundMoney(totalCost + (itemCost * item.quantity));
 
       saleItems.push({
         product: product._id,
         quantity: item.quantity,
-        price: product.price,
+        price: unitPrice,
+        basePrice: product.price,
+        selectedOptions,
         cost: itemCost,
         total: itemTotal
       });
@@ -227,6 +249,8 @@ router.post('/', protect, async (req, res) => {
         product: item.product,
         quantity: item.quantity,
         price: item.price,
+        basePrice: item.basePrice,
+        selectedOptions: item.selectedOptions,
         cost: item.cost,
         total: item.total,
       })),

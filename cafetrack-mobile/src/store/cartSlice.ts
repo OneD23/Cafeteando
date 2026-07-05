@@ -21,6 +21,9 @@ export interface CartItem {
   hasRecipe: boolean;
   recipeId?: string;
   allowIncompleteRecipe?: boolean;
+  basePrice?: number;
+  selectedOptions?: Array<{ groupName: string; valueLabel: string; priceDelta: number }>;
+  cartKey?: string;
 }
 
 interface CartState {
@@ -113,7 +116,13 @@ export const processSale = createAsyncThunk(
       cogs: totalCost,
     }));
     await queueUnsynced('sale', {
-      items: items.map((i) => ({ productId: i.id, quantity: i.quantity, price: i.price })),
+      items: items.map((i) => ({
+        productId: i.id,
+        quantity: i.quantity,
+        price: i.price,
+        basePrice: i.basePrice ?? i.price,
+        selectedOptions: i.selectedOptions || [],
+      })),
       paymentMethod: payload.paymentMethod,
       customer: payload.customerName ? { name: payload.customerName } : undefined,
       discount: { type: 'none', value: 0 },
@@ -134,22 +143,23 @@ const cartSlice = createSlice({
   reducers: {
     addToCart: (state, action: PayloadAction<any>) => {
       const productId = entityId(action.payload);
-      const existing = state.items.find((item: any) => entityId(item) === productId);
+      const cartKey = action.payload.cartKey || productId;
+      const existing = state.items.find((item: any) => (item.cartKey || entityId(item)) === cartKey);
       if (existing) {
         if (existing.allowIncompleteRecipe || existing.quantity < existing.stock) {
           existing.quantity += 1;
         }
       } else {
-        state.items.push({ ...action.payload, id: productId, quantity: 1 });
+        state.items.push({ ...action.payload, id: productId, cartKey, quantity: 1 });
       }
       state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
     removeFromCart: (state, action: PayloadAction<string>) => {
-      state.items = state.items.filter((item: any) => item.id !== action.payload);
+      state.items = state.items.filter((item: any) => (item.cartKey || item.id) !== action.payload);
       state.totals = calculateTotals(state.items, state.totals.discount, state.taxEnabled);
     },
     updateQuantity: (state, action: PayloadAction<{ id: string; qty: number }>) => {
-      const item = state.items.find((item: any) => item.id === action.payload.id);
+      const item = state.items.find((item: any) => (item.cartKey || item.id) === action.payload.id);
       if (item) {
         item.quantity = Math.max(1, Math.min(action.payload.qty, item.stock));
       }
