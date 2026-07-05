@@ -1,10 +1,18 @@
 const mongoose = require('mongoose');
 
+const invoiceItemOptionSchema = new mongoose.Schema({
+  groupName: { type: String, trim: true },
+  valueLabel: { type: String, trim: true },
+  priceDelta: { type: Number, default: 0 },
+}, { _id: false });
+
 const invoiceItemSchema = new mongoose.Schema({
   product: { type: mongoose.Schema.Types.ObjectId, ref: 'Product' },
   name: { type: String, trim: true },
   quantity: { type: Number, required: true, min: 0 },
   price: { type: Number, required: true, min: 0 },
+  basePrice: { type: Number, default: 0, min: 0 },
+  selectedOptions: [invoiceItemOptionSchema],
   cost: { type: Number, default: 0, min: 0 },
   total: { type: Number, required: true, min: 0 },
 }, { _id: false });

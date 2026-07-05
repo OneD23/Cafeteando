@@ -26,6 +26,23 @@ export interface Recipe {
 }
 
 // Producto terminado (lo que se vende)
+export interface ProductOptionValue {
+  label: string;
+  priceDelta: number;
+}
+
+export interface ProductOptionGroup {
+  name: string;
+  required?: boolean;
+  values: ProductOptionValue[];
+}
+
+export interface SelectedProductOption {
+  groupName: string;
+  valueLabel: string;
+  priceDelta: number;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -36,6 +53,7 @@ export interface Product {
   isActive: boolean;
   hasRecipe: boolean; // true = se descuenta de inventario al vender
   recipeId?: string;
+  options?: ProductOptionGroup[];
 }
 
 // Movimiento de inventario

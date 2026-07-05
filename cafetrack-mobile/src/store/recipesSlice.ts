@@ -42,6 +42,10 @@ const initialState: RecipesState = {
     { id: 'prod-4', name: 'Americano', price: 2.75, category: 'coffee', icon: '☕', isActive: true, hasRecipe: true, recipeId: 'rec-4' },
     { id: 'prod-5', name: 'Mocha', price: 4.00, category: 'coffee', icon: '☕', isActive: true, hasRecipe: true, recipeId: 'rec-5' },
     { id: 'prod-6', name: 'Té Helado', price: 2.50, category: 'drink', icon: '🧊', isActive: true, hasRecipe: true, recipeId: 'rec-6' },
+    { id: 'prod-9', name: 'Frappé de Fresa', price: 4.00, category: 'drink', icon: '🍓', isActive: true, hasRecipe: true, recipeId: 'rec-9', options: [
+      { name: 'Tamaño', required: true, values: [{ label: '12 onzas', priceDelta: 0 }, { label: '16 onzas', priceDelta: 1 }, { label: '20 onzas', priceDelta: 1.75 }] },
+      { name: 'Extras', required: false, values: [{ label: 'Extra café', priceDelta: 0.75 }, { label: 'Crema batida', priceDelta: 0.5 }] },
+    ] },
     { id: 'prod-7', name: 'Croissant', price: 2.75, category: 'pastry', icon: '🥐', isActive: true, hasRecipe: true, recipeId: 'rec-7' },
     { id: 'prod-8', name: 'Sandwich', price: 5.50, category: 'food', icon: '🥪', isActive: true, hasRecipe: true, recipeId: 'rec-8' },
   ],
@@ -103,6 +107,16 @@ const initialState: RecipesState = {
         { ingredientId: 'ing-11', quantity: 100 },
       ],
       preparationTime: 3,
+    },
+    // Frappé de Fresa: receta base
+    {
+      productId: 'prod-9',
+      items: [
+        { ingredientId: 'ing-2', quantity: 180 },
+        { ingredientId: 'ing-8', quantity: 20 },
+        { ingredientId: 'ing-11', quantity: 120 },
+      ],
+      preparationTime: 4,
     },
     // Croissant: 1 unidad masa, 50g mantequilla
     {
