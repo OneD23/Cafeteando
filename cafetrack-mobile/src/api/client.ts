@@ -54,7 +54,10 @@ class ApiClient {
       const data = mapIds(await response.json());
 
       if (!response.ok) {
-        throw new Error(data.message || 'Error en la petición');
+        const apiError = new Error(data.message || 'Error en la petición');
+        (apiError as any).status = response.status;
+        (apiError as any).data = data;
+        throw apiError;
       }
 
       return data;

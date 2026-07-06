@@ -68,6 +68,7 @@ const POSScreen: React.FC = () => {
   const [openingAmount, setOpeningAmount] = useState("0");
   const [countedCash, setCountedCash] = useState("0");
   const [cashExpected, setCashExpected] = useState(0);
+  const [cashSummary, setCashSummary] = useState<any>(null);
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const [optionProduct, setOptionProduct] = useState<any>(null);
@@ -81,6 +82,7 @@ const POSScreen: React.FC = () => {
     const cs = remote?.data || { isOpen: false };
     const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
     setCashSessionOpen(!!cs?.isOpen);
+    setCashSummary(cs?.summary || null);
     if (cs?.openingAmount !== undefined) setOpeningAmount(String(cs.openingAmount || 0));
     setCashExpected(expectedCash);
     setCountedCash(String(expectedCash));
@@ -268,7 +270,7 @@ const POSScreen: React.FC = () => {
       if (!result.synced) {
         await syncPendingData();
       }
-      await refreshCashState();
+      const refreshedCash = await refreshCashState();
       await persistSaleForClient({
         saleId: result.saleId,
         customerName: paymentData.customer?.name,
@@ -276,7 +278,12 @@ const POSScreen: React.FC = () => {
         items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price, selectedOptions: i.selectedOptions || [] })),
         date: new Date().toISOString(),
       });
-      Alert.alert("Venta completada", "Se descontaron ingredientes del inventario.");
+      Alert.alert(
+        "Venta completada",
+        result.synced
+          ? `Registrada en caja. Efectivo esperado: $${Number(refreshedCash.expectedCash || 0).toFixed(2)}`
+          : "Guardada localmente por conexión. Se sincronizará automáticamente antes de cerrar caja."
+      );
       setShowPaymentModal(false);
       printInvoice(result.saleId, saleItems, saleTotals);
     } catch (error: any) {
@@ -369,6 +376,9 @@ const POSScreen: React.FC = () => {
 
     Alert.alert("Factura", `Venta ${saleId} registrada. Impresión web no disponible en esta plataforma.`);
   };
+
+  const cashPaymentTotal = (method: string) => Number(cashSummary?.paymentMethods?.find((row: any) => row.method === method)?.total || 0);
+  const cashTurnSales = Number(cashSummary?.totals?.sales || 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -592,12 +602,18 @@ const POSScreen: React.FC = () => {
                 setCashExpected(Number(openingAmount || 0));
                 setCountedCash(String(Number(openingAmount || 0)));
                 setCashSessionOpen(true);
+                setCashSummary({ expectedCash: Number(openingAmount || 0), totals: { sales: 0 }, paymentMethods: [] });
                 setCashOpenModal(false);
               }}>
                 <Text style={styles.checkoutText}>Abrir Caja</Text>
               </TouchableOpacity></>
             ) : (
-              <><Text style={styles.cashExpectedText}>Efectivo esperado: ${cashExpected.toFixed(2)}</Text><TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
+              <><Text style={styles.cashExpectedText}>Efectivo esperado: ${cashExpected.toFixed(2)}</Text>
+              <View style={styles.cashBreakdownCard}>
+                <Text style={styles.cashBreakdownText}>Ventas del turno: ${cashTurnSales.toFixed(2)}</Text>
+                <Text style={styles.cashBreakdownText}>Efectivo: ${cashPaymentTotal('cash').toFixed(2)} · Tarjeta: ${cashPaymentTotal('card').toFixed(2)} · Transferencia: ${cashPaymentTotal('transfer').toFixed(2)}</Text>
+              </View>
+              <TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
               <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: '#c0392b' }]} onPress={async () => {
                 const rawSales = await AsyncStorage.getItem('cafetrack_sales_history');
                 const sales = rawSales ? JSON.parse(rawSales) : [];
@@ -609,6 +625,7 @@ const POSScreen: React.FC = () => {
                 const closeResponse = await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
                 const closing = closeResponse?.data?.closing;
                 setCashExpected(0);
+                setCashSummary(null);
                 setCashSessionOpen(false);
                 setCashOpenModal(false);
                 Alert.alert(
@@ -1022,6 +1039,21 @@ const styles = StyleSheet.create({
     color: '#d4a574',
     fontSize: 11,
     marginTop: 3,
+  },
+  cashBreakdownCard: {
+    backgroundColor: '#30180f',
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  cashBreakdownText: {
+    color: '#d8c6b2',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
   },
   cashExpectedText: {
     color: '#d4a574',

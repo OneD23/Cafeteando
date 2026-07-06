@@ -138,7 +138,10 @@ export const processSale = createAsyncThunk(
     try {
       await api.createSale(salePayload);
       synced = true;
-    } catch {
+    } catch (error: any) {
+      if (error?.status) {
+        throw error;
+      }
       await queueUnsynced('sale', salePayload);
     }
     
