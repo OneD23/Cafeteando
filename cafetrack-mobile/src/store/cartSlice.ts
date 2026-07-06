@@ -2,6 +2,7 @@ import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { consumeIngredients } from './inventorySlice';
 import { recordSale } from './accountingSlice';
 import { queueUnsynced } from '../services/localDb';
+import api from '../api/client';
 
 const entityId = (entity: any) => String(entity?.id ?? entity?._id ?? '');
 
@@ -115,7 +116,7 @@ export const processSale = createAsyncThunk(
       revenue: state.cart.totals.total,
       cogs: totalCost,
     }));
-    await queueUnsynced('sale', {
+    const salePayload = {
       items: items.map((i) => ({
         productId: i.id,
         quantity: i.quantity,
@@ -131,9 +132,17 @@ export const processSale = createAsyncThunk(
       localSaleId: saleId,
       syncId: saleId,
       idempotencyKey: saleId,
-    });
+    };
+
+    let synced = false;
+    try {
+      await api.createSale(salePayload);
+      synced = true;
+    } catch {
+      await queueUnsynced('sale', salePayload);
+    }
     
-    return { success: true, timestamp: new Date().toISOString(), saleId };
+    return { success: true, timestamp: new Date().toISOString(), saleId, synced };
   }
 );
 

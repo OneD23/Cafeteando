@@ -12,6 +12,7 @@ import {
   Platform,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +22,7 @@ import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQ
 import { PaymentModal } from "../components/PaymentModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../api/client";
+import { syncPendingData } from "../services/localDb";
 
 const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
@@ -74,20 +76,25 @@ const POSScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const productColumns = width >= 1500 ? 4 : width >= 1000 ? 3 : 2;
+  const refreshCashState = React.useCallback(async () => {
+    const remote = await api.getCashSession();
+    const cs = remote?.data || { isOpen: false };
+    const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
+    setCashSessionOpen(!!cs?.isOpen);
+    if (cs?.openingAmount !== undefined) setOpeningAmount(String(cs.openingAmount || 0));
+    setCashExpected(expectedCash);
+    setCountedCash(String(expectedCash));
+    return { cashSession: cs, expectedCash };
+  }, []);
+
   React.useEffect(() => {
     (async () => {
-      const remote = await api.getCashSession();
-      const cs = remote?.data || { isOpen: false };
-      setCashSessionOpen(!!cs?.isOpen);
-      if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
-      const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
-      setCashExpected(expectedCash);
-      setCountedCash(String(expectedCash));
+      await refreshCashState();
       const rawClients = await AsyncStorage.getItem('cafetrack_clients');
       const parsedClients = rawClients ? JSON.parse(rawClients) : [];
       setClients(parsedClients.filter((c: any) => !!String(c?.name || '').trim()));
     })();
-  }, []);
+  }, [refreshCashState]);
   const categories = useMemo<string[]>(() => {
     const allCategories = Array.from(
       new Set<string>(products.map((p: any) => String(p.category || "")).filter(Boolean))
@@ -258,6 +265,10 @@ const POSScreen: React.FC = () => {
           customerName: paymentData.customer?.name,
         }) as any
       ).unwrap();
+      if (!result.synced) {
+        await syncPendingData();
+      }
+      await refreshCashState();
       await persistSaleForClient({
         saleId: result.saleId,
         customerName: paymentData.customer?.name,
@@ -275,7 +286,6 @@ const POSScreen: React.FC = () => {
 
 
   const persistSaleForClient = async (payload: { saleId: string; customerName?: string; total: number; items: any[]; date: string }) => {
-    if (!payload.customerName?.trim()) return;
     const raw = await AsyncStorage.getItem(SALES_STORAGE_KEY);
     const history = raw ? JSON.parse(raw) : [];
     history.unshift(payload);
@@ -373,7 +383,7 @@ const POSScreen: React.FC = () => {
         <View style={styles.statsCard}>
           <Text style={styles.statLabel}>Total actual</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
-          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={() => setCashOpenModal(true)}>
+          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
             <View style={[styles.cashDot, { backgroundColor: cashSessionOpen ? '#12b76a' : '#f04438' }]} />
             <Text style={styles.cashPillText}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
           </TouchableOpacity>
@@ -511,7 +521,7 @@ const POSScreen: React.FC = () => {
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
           </View>
-          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={() => setCashOpenModal(true)}>
+          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
             <Text style={styles.cashControlText}>{cashSessionOpen ? 'Cerrar caja' : 'Abrir caja'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.checkoutButton} onPress={handleCompleteSale}>
@@ -568,8 +578,12 @@ const POSScreen: React.FC = () => {
         clients={clients}
       />
       <Modal visible={cashOpenModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalCard}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cashModalContent}>
             <Text style={styles.cartTitle}>Control de Caja</Text>
             {!cashSessionOpen ? (
               <><TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
@@ -592,18 +606,23 @@ const POSScreen: React.FC = () => {
                 const total = salesToday.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
                 const report = { date: new Date().toISOString(), openingAmount: Number(openingAmount || 0), salesCount: salesToday.length, totalSales: total, net: total - Number(openingAmount || 0) };
                 await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-                await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
+                const closeResponse = await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
+                const closing = closeResponse?.data?.closing;
                 setCashExpected(0);
                 setCashSessionOpen(false);
                 setCashOpenModal(false);
-                Alert.alert('Cierre de caja', `Ventas: ${salesToday.length} | Total: $${total.toFixed(2)}`);
+                Alert.alert(
+                  'Cierre de caja',
+                  `Esperado servidor: $${Number(closing?.expectedCash || cashExpected).toFixed(2)} | Contado: $${Number(closing?.countedCash || countedCash || 0).toFixed(2)} | Diferencia: $${Number(closing?.difference || 0).toFixed(2)}`
+                );
               }}>
                 <Text style={[styles.checkoutText, { color: '#fff' }]}>Cerrar Caja y Reporte</Text>
               </TouchableOpacity></>
             )}
             <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setCashOpenModal(false)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -831,7 +850,7 @@ const styles = StyleSheet.create({
   },
   cartSheet: {
     position: "absolute",
-    bottom: 0,
+    bottom: Platform.OS === "web" ? 96 : 0,
     left: 0,
     right: 0,
     backgroundColor: "#2c1810",
@@ -841,7 +860,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#f4b86a",
     padding: 20,
     paddingBottom: 30,
-    maxHeight: 400,
+    maxHeight: Platform.OS === "web" ? 360 : 400,
   },
   cartTitle: {
     color: "#f5f1e8",
@@ -1015,7 +1034,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#1a0f0a', borderWidth: 1, borderColor: '#4a3428', borderRadius: 14, padding: 16 },
+  modalCard: { backgroundColor: '#1a0f0a', borderWidth: 1, borderColor: '#4a3428', borderRadius: 14, padding: 16, maxHeight: '86%' },
+  cashModalContent: { paddingBottom: 8 },
 });
 
 export default POSScreen;
