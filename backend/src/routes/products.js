@@ -36,7 +36,7 @@ router.post('/', protect, async (req, res) => {
   session.startTransaction();
 
   try {
-    const { name, price, category, icon, image, recipe, sku } = req.body;
+    const { name, price, category, icon, image, recipe, sku, options } = req.body;
     if (sku) {
       const dup = await Product.findOne({ sku: String(sku).toUpperCase().trim() }).session(session);
       if (dup) throw new Error('SKU duplicado');
@@ -50,6 +50,7 @@ router.post('/', protect, async (req, res) => {
       icon: icon || '☕',
       image,
       sku,
+      options: Array.isArray(options) ? options : [],
       hasRecipe: true
     }], { session, ordered: true });
 

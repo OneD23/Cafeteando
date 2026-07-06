@@ -11,6 +11,8 @@ import {
   Alert,
   Platform,
   Modal,
+  ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +22,7 @@ import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQ
 import { PaymentModal } from "../components/PaymentModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../api/client";
+import { syncPendingData } from "../services/localDb";
 
 const SALES_STORAGE_KEY = "cafetrack_sales_history";
 
@@ -42,6 +45,9 @@ const recipeIngredientName = (recipeItem: any) => {
   return typeof ingredientRef === "object" ? ingredientRef?.name : undefined;
 };
 
+const optionKey = (options: Array<{ groupName: string; valueLabel: string; priceDelta: number }> = []) =>
+  options.map((option) => `${option.groupName}:${option.valueLabel}`).join('|');
+
 const roundQuantity = (value: number) =>
   Math.round((Number(value) + Number.EPSILON) * 100) / 100;
 
@@ -62,26 +68,35 @@ const POSScreen: React.FC = () => {
   const [openingAmount, setOpeningAmount] = useState("0");
   const [countedCash, setCountedCash] = useState("0");
   const [cashExpected, setCashExpected] = useState(0);
+  const [cashSummary, setCashSummary] = useState<any>(null);
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
+  const [optionProduct, setOptionProduct] = useState<any>(null);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({});
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const productColumns = width >= 1500 ? 4 : width >= 1000 ? 3 : 2;
+  const refreshCashState = React.useCallback(async () => {
+    const remote = await api.getCashSession();
+    const cs = remote?.data || { isOpen: false };
+    const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
+    setCashSessionOpen(!!cs?.isOpen);
+    setCashSummary(cs?.summary || null);
+    if (cs?.openingAmount !== undefined) setOpeningAmount(String(cs.openingAmount || 0));
+    setCashExpected(expectedCash);
+    setCountedCash(String(expectedCash));
+    return { cashSession: cs, expectedCash };
+  }, []);
+
   React.useEffect(() => {
     (async () => {
-      const remote = await api.getCashSession();
-      const cs = remote?.data || { isOpen: false };
-      setCashSessionOpen(!!cs?.isOpen);
-      if (cs?.openingAmount) setOpeningAmount(String(cs.openingAmount));
-      const expectedCash = Number(cs?.summary?.expectedCash || cs?.openingAmount || 0);
-      setCashExpected(expectedCash);
-      setCountedCash(String(expectedCash));
+      await refreshCashState();
       const rawClients = await AsyncStorage.getItem('cafetrack_clients');
       const parsedClients = rawClients ? JSON.parse(rawClients) : [];
       setClients(parsedClients.filter((c: any) => !!String(c?.name || '').trim()));
     })();
-  }, []);
+  }, [refreshCashState]);
   const categories = useMemo<string[]>(() => {
     const allCategories = Array.from(
       new Set<string>(products.map((p: any) => String(p.category || "")).filter(Boolean))
@@ -154,8 +169,50 @@ const POSScreen: React.FC = () => {
     });
   }, [availableProducts, selectedCategory, searchQuery]);
 
-  const addProductToCart = (product: any, allowIncompleteRecipe = false) => {
-    dispatch(addToCart({ ...product, allowIncompleteRecipe }));
+  const addProductToCart = (product: any, allowIncompleteRecipe = false, options: Array<{ groupName: string; valueLabel: string; priceDelta: number }> = []) => {
+    const unitPrice = Number(product.price || 0) + options.reduce((sum, option) => sum + Number(option.priceDelta || 0), 0);
+    dispatch(addToCart({
+      ...product,
+      allowIncompleteRecipe,
+      basePrice: product.price,
+      price: unitPrice,
+      selectedOptions: options,
+      cartKey: `${entityId(product)}::${optionKey(options)}`,
+    }));
+  };
+
+  const openOptionsForProduct = (product: any, allowIncompleteRecipe = false) => {
+    const groups = Array.isArray(product.options) ? product.options.filter((group: any) => Array.isArray(group.values) && group.values.length > 0) : [];
+    if (!groups.length) {
+      addProductToCart(product, allowIncompleteRecipe);
+      return;
+    }
+
+    const defaults = groups.reduce((acc: Record<string, any>, group: any) => {
+      if (group.required && group.values[0]) acc[group.name] = group.values[0];
+      return acc;
+    }, {});
+    setSelectedOptions(defaults);
+    setOptionProduct({ ...product, allowIncompleteRecipe });
+  };
+
+  const confirmProductOptions = () => {
+    if (!optionProduct) return;
+    const groups = Array.isArray(optionProduct.options) ? optionProduct.options : [];
+    const missingRequired = groups.find((group: any) => group.required && !selectedOptions[group.name]);
+    if (missingRequired) {
+      Alert.alert('Elige una opción', `Selecciona ${missingRequired.name} para continuar.`);
+      return;
+    }
+
+    const options = Object.entries(selectedOptions).map(([groupName, value]: any) => ({
+      groupName,
+      valueLabel: value.label,
+      priceDelta: Number(value.priceDelta || 0),
+    }));
+    addProductToCart(optionProduct, optionProduct.allowIncompleteRecipe, options);
+    setOptionProduct(null);
+    setSelectedOptions({});
   };
 
   const handleAddToCart = (product: any) => {
@@ -168,13 +225,13 @@ const POSScreen: React.FC = () => {
         `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
         [
           { text: "Cancelar", style: "cancel" },
-          { text: "Sí, continuar", onPress: () => addProductToCart(product, true) },
+          { text: "Sí, continuar", onPress: () => openOptionsForProduct(product, true) },
         ]
       );
       return;
     }
 
-    addProductToCart(product);
+    openOptionsForProduct(product);
   };
 
   const handleCompleteSale = async () => {
@@ -210,14 +267,23 @@ const POSScreen: React.FC = () => {
           customerName: paymentData.customer?.name,
         }) as any
       ).unwrap();
+      if (!result.synced) {
+        await syncPendingData();
+      }
+      const refreshedCash = await refreshCashState();
       await persistSaleForClient({
         saleId: result.saleId,
         customerName: paymentData.customer?.name,
         total: saleTotals.total,
-        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price })),
+        items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price, selectedOptions: i.selectedOptions || [] })),
         date: new Date().toISOString(),
       });
-      Alert.alert("Venta completada", "Se descontaron ingredientes del inventario.");
+      Alert.alert(
+        "Venta completada",
+        result.synced
+          ? `Registrada en caja. Efectivo esperado: $${Number(refreshedCash.expectedCash || 0).toFixed(2)}`
+          : "Guardada localmente por conexión. Se sincronizará automáticamente antes de cerrar caja."
+      );
       setShowPaymentModal(false);
       printInvoice(result.saleId, saleItems, saleTotals);
     } catch (error: any) {
@@ -227,7 +293,6 @@ const POSScreen: React.FC = () => {
 
 
   const persistSaleForClient = async (payload: { saleId: string; customerName?: string; total: number; items: any[]; date: string }) => {
-    if (!payload.customerName?.trim()) return;
     const raw = await AsyncStorage.getItem(SALES_STORAGE_KEY);
     const history = raw ? JSON.parse(raw) : [];
     history.unshift(payload);
@@ -240,7 +305,7 @@ const POSScreen: React.FC = () => {
         .map(
           (item: any) => `
             <tr>
-              <td>${item.name}</td>
+              <td>${item.name}${item.selectedOptions?.length ? `<br/><small>${item.selectedOptions.map((option: any) => `${option.groupName}: ${option.valueLabel}`).join(' · ')}</small>` : ''}</td>
               <td>${item.quantity}</td>
               <td>$${item.price.toFixed(2)}</td>
               <td>$${(item.price * item.quantity).toFixed(2)}</td>
@@ -312,6 +377,9 @@ const POSScreen: React.FC = () => {
     Alert.alert("Factura", `Venta ${saleId} registrada. Impresión web no disponible en esta plataforma.`);
   };
 
+  const cashPaymentTotal = (method: string) => Number(cashSummary?.paymentMethods?.find((row: any) => row.method === method)?.total || 0);
+  const cashTurnSales = Number(cashSummary?.totals?.sales || 0);
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#1a0f0a" />
@@ -325,7 +393,7 @@ const POSScreen: React.FC = () => {
         <View style={styles.statsCard}>
           <Text style={styles.statLabel}>Total actual</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
-          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={() => setCashOpenModal(true)}>
+          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
             <View style={[styles.cashDot, { backgroundColor: cashSessionOpen ? '#12b76a' : '#f04438' }]} />
             <Text style={styles.cashPillText}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
           </TouchableOpacity>
@@ -421,24 +489,29 @@ const POSScreen: React.FC = () => {
           {!cartCollapsed && (
             <FlatList
               data={cartItems}
-              keyExtractor={(item) => item.id}
+              keyExtractor={(item: any) => item.cartKey || item.id}
               style={styles.cartList}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }: any) => (
             <View key={item.id} style={styles.cartItem}>
               <View style={styles.cartItemLeft}>
                 <Text style={styles.cartItemName}>{item.name}</Text>
+                {item.selectedOptions?.length > 0 && (
+                  <Text style={styles.cartItemOptions}>
+                    {item.selectedOptions.map((option: any) => `${option.groupName}: ${option.valueLabel}`).join(' · ')}
+                  </Text>
+                )}
                 <View style={styles.qtyRow}>
                   <TouchableOpacity
                     style={styles.qtyBtn}
-                    onPress={() => dispatch(updateQuantity({ id: item.id, qty: item.quantity - 1 }))}
+                    onPress={() => dispatch(updateQuantity({ id: item.cartKey || item.id, qty: item.quantity - 1 }))}
                   >
                     <Text style={styles.qtyBtnText}>-</Text>
                   </TouchableOpacity>
                   <Text style={styles.qtyValue}>{item.quantity}</Text>
                   <TouchableOpacity
                     style={styles.qtyBtn}
-                    onPress={() => dispatch(updateQuantity({ id: item.id, qty: item.quantity + 1 }))}
+                    onPress={() => dispatch(updateQuantity({ id: item.cartKey || item.id, qty: item.quantity + 1 }))}
                   >
                     <Text style={styles.qtyBtnText}>+</Text>
                   </TouchableOpacity>
@@ -446,7 +519,7 @@ const POSScreen: React.FC = () => {
               </View>
               <View style={styles.cartItemRight}>
                 <Text style={styles.cartItemPrice}>${(item.price * item.quantity).toFixed(2)}</Text>
-                <TouchableOpacity onPress={() => dispatch(removeFromCart(item.id))}>
+                <TouchableOpacity onPress={() => dispatch(removeFromCart(item.cartKey || item.id))}>
                   <Ionicons name="trash-outline" size={18} color="#d96d61" />
                 </TouchableOpacity>
               </View>
@@ -458,7 +531,7 @@ const POSScreen: React.FC = () => {
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
           </View>
-          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={() => setCashOpenModal(true)}>
+          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
             <Text style={styles.cashControlText}>{cashSessionOpen ? 'Cerrar caja' : 'Abrir caja'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.checkoutButton} onPress={handleCompleteSale}>
@@ -466,6 +539,46 @@ const POSScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={!!optionProduct} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.cartTitle}>{optionProduct?.name}</Text>
+            <Text style={styles.optionModalSubtitle}>Configura las opciones antes de agregar al carrito.</Text>
+            <ScrollView style={styles.optionModalList}>
+              {(optionProduct?.options || []).map((group: any) => (
+                <View key={group.name} style={styles.optionModalGroup}>
+                  <Text style={styles.optionModalGroupTitle}>{group.name}{group.required ? ' *' : ''}</Text>
+                  <View style={styles.optionChoicesRow}>
+                    {group.values.map((value: any) => {
+                      const selected = selectedOptions[group.name]?.label === value.label;
+                      return (
+                        <TouchableOpacity
+                          key={`${group.name}-${value.label}`}
+                          style={[styles.optionChoice, selected && styles.optionChoiceActive]}
+                          onPress={() => setSelectedOptions((prev) => ({ ...prev, [group.name]: value }))}
+                        >
+                          <Text style={[styles.optionChoiceText, selected && styles.optionChoiceTextActive]}>{value.label}</Text>
+                          <Text style={[styles.optionChoicePrice, selected && styles.optionChoiceTextActive]}>+${Number(value.priceDelta || 0).toFixed(2)}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  {!group.required && selectedOptions[group.name] && (
+                    <TouchableOpacity onPress={() => setSelectedOptions((prev) => { const next = { ...prev }; delete next[group.name]; return next; })}>
+                      <Text style={styles.clearOptionText}>Quitar {group.name}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.checkoutButton} onPress={confirmProductOptions}>
+              <Text style={styles.checkoutText}>Agregar por ${((optionProduct?.price || 0) + Object.values(selectedOptions).reduce((sum: number, value: any) => sum + Number(value.priceDelta || 0), 0)).toFixed(2)}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setOptionProduct(null)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <PaymentModal
         visible={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
@@ -475,8 +588,12 @@ const POSScreen: React.FC = () => {
         clients={clients}
       />
       <Modal visible={cashOpenModal} transparent animationType="slide">
-        <View style={styles.modalBackdrop}>
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
           <View style={styles.modalCard}>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.cashModalContent}>
             <Text style={styles.cartTitle}>Control de Caja</Text>
             {!cashSessionOpen ? (
               <><TextInput style={styles.searchInput} value={openingAmount} onChangeText={setOpeningAmount} keyboardType="decimal-pad" placeholder="Monto apertura" placeholderTextColor="#8b6f4e" />
@@ -485,12 +602,18 @@ const POSScreen: React.FC = () => {
                 setCashExpected(Number(openingAmount || 0));
                 setCountedCash(String(Number(openingAmount || 0)));
                 setCashSessionOpen(true);
+                setCashSummary({ expectedCash: Number(openingAmount || 0), totals: { sales: 0 }, paymentMethods: [] });
                 setCashOpenModal(false);
               }}>
                 <Text style={styles.checkoutText}>Abrir Caja</Text>
               </TouchableOpacity></>
             ) : (
-              <><Text style={styles.cashExpectedText}>Efectivo esperado: ${cashExpected.toFixed(2)}</Text><TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
+              <><Text style={styles.cashExpectedText}>Efectivo esperado: ${cashExpected.toFixed(2)}</Text>
+              <View style={styles.cashBreakdownCard}>
+                <Text style={styles.cashBreakdownText}>Ventas del turno: ${cashTurnSales.toFixed(2)}</Text>
+                <Text style={styles.cashBreakdownText}>Efectivo: ${cashPaymentTotal('cash').toFixed(2)} · Tarjeta: ${cashPaymentTotal('card').toFixed(2)} · Transferencia: ${cashPaymentTotal('transfer').toFixed(2)}</Text>
+              </View>
+              <TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
               <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: '#c0392b' }]} onPress={async () => {
                 const rawSales = await AsyncStorage.getItem('cafetrack_sales_history');
                 const sales = rawSales ? JSON.parse(rawSales) : [];
@@ -499,18 +622,24 @@ const POSScreen: React.FC = () => {
                 const total = salesToday.reduce((sum: number, s: any) => sum + Number(s.total || 0), 0);
                 const report = { date: new Date().toISOString(), openingAmount: Number(openingAmount || 0), salesCount: salesToday.length, totalSales: total, net: total - Number(openingAmount || 0) };
                 await AsyncStorage.setItem('cash_close_report', JSON.stringify(report));
-                await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
+                const closeResponse = await api.closeCashSession(Number(countedCash || 0), `Cierre POS. Ventas locales: ${salesToday.length}`);
+                const closing = closeResponse?.data?.closing;
                 setCashExpected(0);
+                setCashSummary(null);
                 setCashSessionOpen(false);
                 setCashOpenModal(false);
-                Alert.alert('Cierre de caja', `Ventas: ${salesToday.length} | Total: $${total.toFixed(2)}`);
+                Alert.alert(
+                  'Cierre de caja',
+                  `Esperado servidor: $${Number(closing?.expectedCash || cashExpected).toFixed(2)} | Contado: $${Number(closing?.countedCash || countedCash || 0).toFixed(2)} | Diferencia: $${Number(closing?.difference || 0).toFixed(2)}`
+                );
               }}>
                 <Text style={[styles.checkoutText, { color: '#fff' }]}>Cerrar Caja y Reporte</Text>
               </TouchableOpacity></>
             )}
             <TouchableOpacity style={[styles.qtyBtn, { marginTop: 10, width: '100%', height: 40 }]} onPress={() => setCashOpenModal(false)}><Text style={styles.qtyBtnText}>Cancelar</Text></TouchableOpacity>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   );
@@ -738,7 +867,7 @@ const styles = StyleSheet.create({
   },
   cartSheet: {
     position: "absolute",
-    bottom: 0,
+    bottom: Platform.OS === "web" ? 96 : 0,
     left: 0,
     right: 0,
     backgroundColor: "#2c1810",
@@ -748,7 +877,7 @@ const styles = StyleSheet.create({
     borderTopColor: "#f4b86a",
     padding: 20,
     paddingBottom: 30,
-    maxHeight: 400,
+    maxHeight: Platform.OS === "web" ? 360 : 400,
   },
   cartTitle: {
     color: "#f5f1e8",
@@ -854,6 +983,78 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+
+  optionModalSubtitle: {
+    color: '#8b6f4e',
+    marginTop: 6,
+    marginBottom: 12,
+  },
+  optionModalList: {
+    maxHeight: 360,
+  },
+  optionModalGroup: {
+    marginBottom: 16,
+  },
+  optionModalGroupTitle: {
+    color: '#d4a574',
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  optionChoicesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  optionChoice: {
+    backgroundColor: '#2c1810',
+    borderColor: '#4a3428',
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minWidth: 110,
+  },
+  optionChoiceActive: {
+    backgroundColor: '#d4a574',
+    borderColor: '#d4a574',
+  },
+  optionChoiceText: {
+    color: '#f5f1e8',
+    fontWeight: '800',
+  },
+  optionChoiceTextActive: {
+    color: '#1a0f0a',
+  },
+  optionChoicePrice: {
+    color: '#8b6f4e',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  clearOptionText: {
+    color: '#d96d61',
+    fontSize: 12,
+    marginTop: 8,
+  },
+  cartItemOptions: {
+    color: '#d4a574',
+    fontSize: 11,
+    marginTop: 3,
+  },
+  cashBreakdownCard: {
+    backgroundColor: '#30180f',
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  cashBreakdownText: {
+    color: '#d8c6b2',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 18,
+  },
   cashExpectedText: {
     color: '#d4a574',
     marginTop: 12,
@@ -865,7 +1066,8 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', padding: 20 },
-  modalCard: { backgroundColor: '#1a0f0a', borderWidth: 1, borderColor: '#4a3428', borderRadius: 14, padding: 16 },
+  modalCard: { backgroundColor: '#1a0f0a', borderWidth: 1, borderColor: '#4a3428', borderRadius: 14, padding: 16, maxHeight: '86%' },
+  cashModalContent: { paddingBottom: 8 },
 });
 
 export default POSScreen;

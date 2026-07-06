@@ -1,5 +1,12 @@
 const mongoose = require('mongoose');
 
+
+const saleItemOptionSchema = new mongoose.Schema({
+  groupName: { type: String, trim: true },
+  valueLabel: { type: String, trim: true },
+  priceDelta: { type: Number, default: 0 }
+}, { _id: false });
+
 const saleItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
@@ -15,6 +22,11 @@ const saleItemSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  basePrice: {
+    type: Number,
+    default: 0
+  },
+  selectedOptions: [saleItemOptionSchema],
   cost: {
     type: Number,
     required: true

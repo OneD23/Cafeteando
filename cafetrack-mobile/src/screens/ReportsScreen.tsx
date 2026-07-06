@@ -8,8 +8,9 @@ import {
   TextInput,
   Alert,
   RefreshControl,
+  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -71,6 +72,7 @@ const movementTypes = ['', 'entrada', 'salida', 'venta', 'gasto', 'apertura', 'c
 const expenseCategories = ['hielo', 'vasos', 'servilletas', 'ingredientes', 'transporte', 'nómina', 'mantenimiento', 'otros'];
 
 export const ReportsScreen: React.FC = () => {
+  const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<AccountingTab>('dashboard');
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [dashboard, setDashboard] = useState<any>(null);
@@ -112,7 +114,11 @@ export const ReportsScreen: React.FC = () => {
       setJournal(journalRes?.data || null);
       setMovements(movementsRes?.data || []);
       setMovementTotals(movementsRes?.totalsByType || []);
-      setCurrentCash(cashRes?.data || null);
+      const openCash = cashRes?.data || null;
+      setCurrentCash(openCash);
+      if (openCash?.summary) {
+        setCashForm((prev) => ({ ...prev, countedCash: String(Number(openCash.summary.expectedCash || 0)) }));
+      }
       setClosings(closingsRes?.data || []);
       setReport(reportRes?.data || null);
     } catch (error: any) {
@@ -249,7 +255,10 @@ export const ReportsScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} />} contentContainerStyle={styles.content}>
+      <ScrollView
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={loadData} />}
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, Platform.OS === 'web' ? 150 : 96) }]}
+      >
         <FilterPanel />
 
         {activeTab === 'dashboard' && (
@@ -315,7 +324,7 @@ export const ReportsScreen: React.FC = () => {
         {activeTab === 'caja' && (
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Apertura y cierre de caja</Text>
-            <View style={styles.cashBanner}><Text style={styles.cashBannerTitle}>{currentCash ? 'Caja abierta' : 'Caja cerrada'}</Text><Text style={styles.cashBannerText}>Efectivo esperado: {money(currentCash?.summary?.expectedCash || dashboard?.expectedCash)}</Text></View>
+            <View style={styles.cashBanner}><Text style={styles.cashBannerTitle}>{currentCash ? 'Caja abierta' : 'Caja cerrada'}</Text><Text style={styles.cashBannerText}>Efectivo esperado: {money(currentCash?.summary?.expectedCash || dashboard?.expectedCash)}</Text><Text style={styles.cashBannerHelp}>Incluye apertura + ventas en efectivo registradas en servidor, menos gastos/salidas. Tarjeta y transferencia se muestran aparte en KPIs.</Text></View>
             {!currentCash ? <><TextInput style={styles.input} value={cashForm.openingAmount} onChangeText={(v) => setCashForm((p) => ({ ...p, openingAmount: v }))} placeholder="Monto inicial" keyboardType="decimal-pad" /><TouchableOpacity style={styles.primaryButton} onPress={openCash}><Text style={styles.primaryButtonText}>Abrir caja</Text></TouchableOpacity></> : <><TextInput style={styles.input} value={cashForm.countedCash} onChangeText={(v) => setCashForm((p) => ({ ...p, countedCash: v }))} placeholder="Efectivo contado" keyboardType="decimal-pad" /><TextInput style={styles.input} value={cashForm.observations} onChangeText={(v) => setCashForm((p) => ({ ...p, observations: v }))} placeholder="Observaciones" /><TouchableOpacity style={styles.dangerButton} onPress={closeCash}><Text style={styles.primaryButtonText}>Cerrar caja y generar cierre</Text></TouchableOpacity></>}
             {closings.map((closing) => <View key={closing.id} style={styles.tableRow}><View style={styles.tableMain}><Text style={styles.rowTitle}>Cierre {closing.fechaContable}</Text><Text style={styles.rowMeta}>Contado {money(closing.countedCash)} · Esperado {money(closing.expectedCash)} · Dif. {money(closing.difference)}</Text></View><TouchableOpacity onPress={() => printRows('Cierre de caja', [closing])}><Text style={styles.link}>PDF</Text></TouchableOpacity></View>)}
           </View>
@@ -347,7 +356,7 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: '#d4a574', borderColor: '#d4a574' },
   tabText: { color: '#d4a574', fontWeight: '800' },
   activeTabText: { color: '#1a0f0a' },
-  content: { padding: 14, paddingBottom: 40, backgroundColor: '#1a0f0a' },
+  content: { padding: 14, backgroundColor: '#1a0f0a' },
   filterCard: { backgroundColor: '#2c1810', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#4a3428' },
   filterGrid: { gap: 10 },
   input: { backgroundColor: '#30180f', borderWidth: 1, borderColor: '#4a3428', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#f5f1e8', marginBottom: 8 },
@@ -389,6 +398,7 @@ const styles = StyleSheet.create({
   cashBanner: { backgroundColor: '#30180f', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#4a3428' },
   cashBannerTitle: { color: '#f5f1e8', fontSize: 18, fontWeight: '900' },
   cashBannerText: { color: '#d4a574', marginTop: 4, fontWeight: '700' },
+  cashBannerHelp: { color: '#b98b5f', marginTop: 6, fontSize: 12, lineHeight: 16 },
   reportGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   reportCard: { width: '48%', backgroundColor: '#30180f', borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#4a3428' },
 });
