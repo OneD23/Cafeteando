@@ -128,6 +128,7 @@ export const processSale = createAsyncThunk(
       customer: payload.customerName ? { name: payload.customerName } : undefined,
       discount: { type: 'none', value: 0 },
       total: state.cart.totals.total,
+      taxEnabled: state.cart.taxEnabled,
       unsynced: true,
       localSaleId: saleId,
       syncId: saleId,

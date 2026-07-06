@@ -87,6 +87,7 @@ router.post('/', protect, async (req, res) => {
 
   try {
     const { items, paymentMethod, customer, discount, deviceId, syncId, idempotencyKey } = req.body;
+    const taxEnabled = req.body?.taxEnabled !== false;
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error('La venta requiere al menos un producto');
     }
@@ -199,7 +200,7 @@ router.post('/', protect, async (req, res) => {
     }
 
     const taxableBase = roundMoney(subtotal - discountAmount);
-    const tax = roundMoney(taxableBase * 0.16);
+    const tax = taxEnabled ? roundMoney(taxableBase * 0.16) : 0;
     const total = roundMoney(taxableBase + tax);
 
     const now = new Date();
