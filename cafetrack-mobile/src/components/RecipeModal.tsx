@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSelector, useDispatch } from 'react-redux';
-import { Ingredient, RecipeItem } from '../types';
+import { Ingredient, ProductOptionGroup, RecipeItem } from '../types';
 import { addProduct, updateProduct, updateRecipe } from '../store/recipesSlice';
 import { api } from '../api/client';
 
@@ -44,6 +44,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   const [productImage, setProductImage] = useState(editingProduct?.image || '');
   const [selectedIngredients, setSelectedIngredients] = useState<RecipeItem[]>(existingRecipe?.items || []);
   const [prepTime, setPrepTime] = useState(existingRecipe?.preparationTime?.toString() || '2');
+  const [options, setOptions] = useState<ProductOptionGroup[]>(editingProduct?.options || []);
 
   useEffect(() => {
     if (!visible) return;
@@ -54,6 +55,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
     setProductImage(editingProduct?.image || '');
     setSelectedIngredients(existingRecipe?.items || []);
     setPrepTime(existingRecipe?.preparationTime?.toString() || '2');
+    setOptions(editingProduct?.options || []);
   }, [visible, editingProduct, existingRecipe]);
 
   const categories = [
@@ -81,6 +83,50 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
         : item
     ));
   };
+
+  const updateOptionGroup = (index: number, patch: Partial<ProductOptionGroup>) => {
+    setOptions((prev) => prev.map((group, groupIndex) => groupIndex === index ? { ...group, ...patch } : group));
+  };
+
+  const updateOptionValue = (groupIndex: number, valueIndex: number, patch: { label?: string; priceDelta?: number }) => {
+    setOptions((prev) => prev.map((group, currentGroupIndex) => {
+      if (currentGroupIndex !== groupIndex) return group;
+      return {
+        ...group,
+        values: group.values.map((value, currentValueIndex) => currentValueIndex === valueIndex ? { ...value, ...patch } : value),
+      };
+    }));
+  };
+
+  const addOptionGroup = () => {
+    setOptions((prev) => [...prev, { name: '', required: false, values: [{ label: '', priceDelta: 0 }] }]);
+  };
+
+  const removeOptionGroup = (index: number) => {
+    setOptions((prev) => prev.filter((_, groupIndex) => groupIndex !== index));
+  };
+
+  const addOptionValue = (groupIndex: number) => {
+    setOptions((prev) => prev.map((group, currentGroupIndex) => currentGroupIndex === groupIndex
+      ? { ...group, values: [...group.values, { label: '', priceDelta: 0 }] }
+      : group));
+  };
+
+  const removeOptionValue = (groupIndex: number, valueIndex: number) => {
+    setOptions((prev) => prev.map((group, currentGroupIndex) => currentGroupIndex === groupIndex
+      ? { ...group, values: group.values.filter((_, currentValueIndex) => currentValueIndex !== valueIndex) }
+      : group));
+  };
+
+  const normalizeOptions = () => options
+    .map((group) => ({
+      ...group,
+      name: group.name.trim(),
+      values: group.values
+        .map((value) => ({ label: value.label.trim(), priceDelta: Number(value.priceDelta || 0) }))
+        .filter((value) => value.label),
+    }))
+    .filter((group) => group.name && group.values.length > 0);
 
   const pickImageFromDevice = () => {
     if (Platform.OS !== 'web') {
@@ -125,6 +171,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       image: productImage || undefined,
       isActive: editingProduct?.isActive ?? true,
       hasRecipe: true,
+      options: normalizeOptions(),
     };
 
     const recipePayload = {
@@ -175,6 +222,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       setPrice('');
       setProductImage('');
       setSelectedIngredients([]);
+      setOptions([]);
       onClose();
     } catch (error: any) {
       Alert.alert('Error', error?.message || 'No se pudo guardar la receta');
@@ -274,6 +322,60 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
               onChangeText={setPrepTime}
               keyboardType="number-pad"
             />
+
+            <Text style={styles.label}>Opciones extra del producto</Text>
+            <Text style={styles.helperText}>Agrega tamaños, sabores o extras con precio adicional. Ej: Tamaño → 12, 16 y 20 onzas.</Text>
+            {options.map((group, groupIndex) => (
+              <View key={`option-group-${groupIndex}`} style={styles.optionGroupCard}>
+                <View style={styles.optionHeaderRow}>
+                  <TextInput
+                    style={[styles.input, styles.optionGroupInput]}
+                    value={group.name}
+                    onChangeText={(text) => updateOptionGroup(groupIndex, { name: text })}
+                    placeholder="Nombre: Tamaño, Extras..."
+                    placeholderTextColor="#8b6f4e"
+                  />
+                  <TouchableOpacity style={styles.removeOptionBtn} onPress={() => removeOptionGroup(groupIndex)}>
+                    <Ionicons name="trash-outline" size={18} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+                <TouchableOpacity
+                  style={styles.requiredRow}
+                  onPress={() => updateOptionGroup(groupIndex, { required: !group.required })}
+                >
+                  <Ionicons name={group.required ? 'checkbox' : 'square-outline'} size={22} color="#d4a574" />
+                  <Text style={styles.requiredText}>Obligatorio para vender</Text>
+                </TouchableOpacity>
+                {group.values.map((value, valueIndex) => (
+                  <View key={`option-value-${groupIndex}-${valueIndex}`} style={styles.optionValueRow}>
+                    <TextInput
+                      style={[styles.input, styles.optionValueName]}
+                      value={value.label}
+                      onChangeText={(text) => updateOptionValue(groupIndex, valueIndex, { label: text })}
+                      placeholder="Ej: 16 onzas"
+                      placeholderTextColor="#8b6f4e"
+                    />
+                    <TextInput
+                      style={[styles.input, styles.optionValuePrice]}
+                      value={String(value.priceDelta || '')}
+                      onChangeText={(text) => updateOptionValue(groupIndex, valueIndex, { priceDelta: parseFloat(text) || 0 })}
+                      keyboardType="decimal-pad"
+                      placeholder="+$"
+                      placeholderTextColor="#8b6f4e"
+                    />
+                    <TouchableOpacity style={styles.removeSmallBtn} onPress={() => removeOptionValue(groupIndex, valueIndex)}>
+                      <Ionicons name="close" size={16} color="#f5f1e8" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.addOptionValueBtn} onPress={() => addOptionValue(groupIndex)}>
+                  <Text style={styles.addOptionText}>+ Agregar opción</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+            <TouchableOpacity style={styles.addOptionGroupBtn} onPress={addOptionGroup}>
+              <Text style={styles.addOptionText}>+ Agregar grupo de opciones</Text>
+            </TouchableOpacity>
 
             {/* Ingredientes */}
             <Text style={styles.label}>Ingredientes y gramaje</Text>
@@ -509,6 +611,84 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: '#f5f1e8',
     fontWeight: 'bold',
+  },
+
+  helperText: {
+    color: '#8b6f4e',
+    fontSize: 12,
+    marginBottom: 10,
+  },
+  optionGroupCard: {
+    backgroundColor: '#2c1810',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#4a3428',
+    padding: 10,
+    marginBottom: 10,
+  },
+  optionHeaderRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  optionGroupInput: {
+    flex: 1,
+  },
+  removeOptionBtn: {
+    width: 42,
+    height: 42,
+    backgroundColor: '#c0392b',
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requiredRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginVertical: 10,
+  },
+  requiredText: {
+    color: '#f5f1e8',
+    fontSize: 13,
+  },
+  optionValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  optionValueName: {
+    flex: 1,
+    padding: 10,
+  },
+  optionValuePrice: {
+    width: 86,
+    padding: 10,
+  },
+  removeSmallBtn: {
+    width: 30,
+    height: 30,
+    backgroundColor: '#4a3428',
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addOptionGroupBtn: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#d4a574',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  addOptionValueBtn: {
+    padding: 10,
+    alignItems: 'center',
+  },
+  addOptionText: {
+    color: '#d4a574',
+    fontWeight: '700',
   },
   saveButton: {
     backgroundColor: '#27ae60',

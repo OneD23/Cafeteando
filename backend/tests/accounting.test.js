@@ -159,3 +159,11 @@ test('ingredient model supports composite ingredients and expanded requirements'
   assert.equal(expanded.requirements.find((row) => String(row.ingredient._id) === String(milkId)).quantity, 12);
   assert.equal(await calculateCompositeUnitCost(ingredients.get(String(syrupId)), { loadIngredient }), 0.19);
 });
+
+test('sales route honors disabled tax flag from POS payload', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const source = fs.readFileSync(path.join(__dirname, '../src/routes/sales.js'), 'utf8');
+  assert.match(source, /const taxEnabled = req\.body\?\.taxEnabled !== false;/);
+  assert.match(source, /const tax = taxEnabled \? roundMoney\(taxableBase \* 0\.16\) : 0;/);
+});
