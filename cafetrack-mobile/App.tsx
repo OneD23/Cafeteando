@@ -36,11 +36,16 @@ const registerWebServiceWorker = () => {
     return;
   }
 
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch((error) => {
+  const register = async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/service-worker.js');
+      await registration.update();
+    } catch (error) {
       console.warn('No se pudo registrar el modo offline web:', error);
-    });
-  });
+    }
+  };
+
+  register();
 };
 
 function MainTabs() {
