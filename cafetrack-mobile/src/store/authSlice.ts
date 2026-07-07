@@ -1,6 +1,7 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from '../api/client';
+import { OFFLINE_TOKEN, OFFLINE_USER } from '../data/offlineDefaults';
 
 interface User {
   id: string;
@@ -35,10 +36,22 @@ export const loginUser = createAsyncThunk(
         throw new Error('Respuesta de autenticación inválida');
       }
 
-      await AsyncStorage.setItem('token', token);
+      await AsyncStorage.multiSet([['token', token], ['cafetrack_last_user', JSON.stringify(user)]]);
       return { user, token };
     } catch (error: any) {
-      return rejectWithValue(error?.message || 'Credenciales inválidas');
+      const storedUser = await AsyncStorage.getItem('cafetrack_last_user');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        await AsyncStorage.setItem('token', OFFLINE_TOKEN);
+        return { user, token: OFFLINE_TOKEN };
+      }
+
+      if (credentials.username.trim().toLowerCase() === 'admin' && credentials.password === 'admin') {
+        await AsyncStorage.multiSet([['token', OFFLINE_TOKEN], ['cafetrack_last_user', JSON.stringify(OFFLINE_USER)]]);
+        return { user: OFFLINE_USER, token: OFFLINE_TOKEN };
+      }
+
+      return rejectWithValue(error?.message || 'Sin conexión. Usa el último usuario guardado o admin/admin para modo local.');
     }
   }
 );

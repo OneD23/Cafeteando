@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { api } from '../api/client';
+import { DEFAULT_INGREDIENTS } from '../data/offlineDefaults';
 
 interface InventoryIngredient {
   id: string;
@@ -77,7 +78,7 @@ export const deductIngredientsForSale = createAsyncThunk(
 );
 
 const initialState: InventoryState = {
-  ingredients: [],
+  ingredients: DEFAULT_INGREDIENTS,
   movements: [],
   loading: false,
   error: null,
