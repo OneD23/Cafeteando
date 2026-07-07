@@ -14,6 +14,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../api/client';
 
 type AccountingTab = 'dashboard' | 'facturas' | 'diario' | 'movimientos' | 'gastos' | 'caja' | 'reportes';
@@ -69,7 +70,107 @@ const invoiceStatuses = [
 ];
 
 const movementTypes = ['', 'entrada', 'salida', 'venta', 'gasto', 'apertura', 'cierre', 'ajuste', 'anulación'];
+const LOCAL_SALES_KEY = 'cafetrack_sales_history';
+const LOCAL_EXPENSES_KEY = 'cafetrack_expenses_history';
+
 const expenseCategories = ['hielo', 'vasos', 'servilletas', 'ingredientes', 'transporte', 'nómina', 'mantenimiento', 'otros'];
+
+
+const dateInRange = (dateValue: string, startDate: string, endDate: string) => {
+  const day = new Date(dateValue).toISOString().slice(0, 10);
+  return day >= startDate && day <= endDate;
+};
+
+
+const storeLocalExpense = async (expense: any) => {
+  const raw = await AsyncStorage.getItem(LOCAL_EXPENSES_KEY);
+  const expenses = raw ? JSON.parse(raw) : [];
+  const savedExpense = { ...expense, id: expense.id || `exp-${Date.now()}`, date: expense.date || new Date().toISOString() };
+  expenses.unshift(savedExpense);
+  await AsyncStorage.setItem(LOCAL_EXPENSES_KEY, JSON.stringify(expenses.slice(0, 500)));
+
+  if (savedExpense.paymentMethod === 'cash') {
+    const cashRaw = await AsyncStorage.getItem('cafetrack_cash_session');
+    if (cashRaw) {
+      const session = JSON.parse(cashRaw);
+      if (session?.isOpen) {
+        const summary = session.summary || { expectedCash: Number(session.openingAmount || 0), totals: { sales: 0 }, paymentMethods: [] };
+        await AsyncStorage.setItem('cafetrack_cash_session', JSON.stringify({
+          ...session,
+          summary: {
+            ...summary,
+            expectedCash: Number(summary.expectedCash || session.openingAmount || 0) - Number(savedExpense.amount || 0),
+            totals: { ...(summary.totals || {}), expenses: Number(summary.totals?.expenses || 0) + Number(savedExpense.amount || 0) },
+          },
+        }));
+      }
+    }
+  }
+
+  return savedExpense;
+};
+
+const buildLocalAccounting = async (filters: Filters) => {
+  const [salesRaw, expensesRaw, cashRaw] = await Promise.all([
+    AsyncStorage.getItem(LOCAL_SALES_KEY),
+    AsyncStorage.getItem(LOCAL_EXPENSES_KEY),
+    AsyncStorage.getItem('cafetrack_cash_session'),
+  ]);
+  const localSales = (salesRaw ? JSON.parse(salesRaw) : []).filter((sale: any) => dateInRange(sale.date, filters.startDate, filters.endDate));
+  const localExpenses = (expensesRaw ? JSON.parse(expensesRaw) : []).filter((expense: any) => dateInRange(expense.date, filters.startDate, filters.endDate));
+  const currentCash = cashRaw ? JSON.parse(cashRaw) : null;
+  const salesTotal = localSales.reduce((sum: number, sale: any) => sum + Number(sale.total || 0), 0);
+  const expensesTotal = localExpenses.reduce((sum: number, expense: any) => sum + Number(expense.amount || 0), 0);
+  const productsSold = localSales.reduce((sum: number, sale: any) => sum + (sale.items || []).reduce((itemSum: number, item: any) => itemSum + Number(item.qty || item.quantity || 0), 0), 0);
+  const paymentTotal = (method: string) => localSales.filter((sale: any) => sale.paymentMethod === method).reduce((sum: number, sale: any) => sum + Number(sale.total || 0), 0);
+  const invoices = localSales.map((sale: any) => ({
+    id: sale.saleId,
+    invoiceNumber: sale.saleId,
+    fecha: sale.date,
+    customer: sale.customerName ? { name: sale.customerName } : null,
+    paymentMethod: sale.paymentMethod,
+    subtotal: sale.subtotal,
+    itbis: sale.tax,
+    discount: sale.discount,
+    total: sale.total,
+    status: sale.synced === false ? 'pendiente' : 'emitida',
+    items: sale.items || [],
+  }));
+  const movements = [
+    ...localSales.map((sale: any) => ({ id: `sale-${sale.saleId}`, type: 'venta', description: `Venta ${sale.saleId}`, fecha: sale.date, paymentMethod: sale.paymentMethod, amount: sale.total, items: sale.items || [] })),
+    ...localExpenses.map((expense: any) => ({ id: expense.id, type: 'gasto', description: expense.description, fecha: expense.date, paymentMethod: expense.paymentMethod, amount: -Math.abs(Number(expense.amount || 0)) })),
+  ].sort((a: any, b: any) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+
+  return {
+    dashboard: {
+      salesToday: salesTotal,
+      expensesToday: expensesTotal,
+      netResult: salesTotal - expensesTotal,
+      cashStatus: currentCash?.isOpen ? 'open' : 'closed',
+      invoicesIssued: invoices.length,
+      expectedCash: currentCash?.summary?.expectedCash || 0,
+      transfers: paymentTotal('transfer'),
+      card: paymentTotal('card'),
+      productsSold,
+      averageTicket: invoices.length ? salesTotal / invoices.length : 0,
+    },
+    invoices,
+    journal: {
+      totalDebit: expensesTotal,
+      totalCredit: salesTotal,
+      difference: salesTotal - expensesTotal,
+      status: 'local',
+      entries: movements.map((movement: any) => ({ id: movement.id, date: movement.fecha, category: movement.type, reference: movement.id, description: movement.description, debit: movement.type === 'gasto' ? Math.abs(movement.amount) : 0, credit: movement.type === 'venta' ? movement.amount : 0 })),
+    },
+    movements,
+    movementTotals: [
+      { _id: 'venta', total: salesTotal },
+      { _id: 'gasto', total: expensesTotal },
+    ],
+    currentCash: currentCash?.isOpen ? currentCash : null,
+    report: { summary: { salesTotal, expensesTotal, netResult: salesTotal - expensesTotal, productsSold }, payments: ['cash', 'card', 'transfer'].map((method) => ({ method, total: paymentTotal(method) })) },
+  };
+};
 
 export const ReportsScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
@@ -100,6 +201,18 @@ export const ReportsScreen: React.FC = () => {
   const loadData = useCallback(async () => {
     setRefreshing(true);
     try {
+      const local = await buildLocalAccounting(filters);
+      setDashboard(local.dashboard);
+      setInvoices(local.invoices);
+      setJournal(local.journal);
+      setMovements(filters.movementType ? local.movements.filter((movement: any) => movement.type === filters.movementType) : local.movements);
+      setMovementTotals(local.movementTotals);
+      setCurrentCash(local.currentCash);
+      setReport(local.report);
+      if (local.currentCash?.summary) {
+        setCashForm((prev) => ({ ...prev, countedCash: String(Number(local.currentCash.summary.expectedCash || 0)) }));
+      }
+
       const [dashboardRes, invoicesRes, journalRes, movementsRes, cashRes, closingsRes, reportRes] = await Promise.all([
         api.getAccountingDashboard({ date: filters.endDate || todayKey() }),
         api.getInvoices({ ...queryParams, limit: '100' }),
@@ -109,24 +222,34 @@ export const ReportsScreen: React.FC = () => {
         api.getCashClosings({ startDate: filters.startDate, endDate: filters.endDate }),
         api.getReport('range', { startDate: filters.startDate, endDate: filters.endDate }),
       ]);
-      setDashboard(dashboardRes?.data || null);
-      setInvoices(invoicesRes?.data || []);
-      setJournal(journalRes?.data || null);
-      setMovements(movementsRes?.data || []);
-      setMovementTotals(movementsRes?.totalsByType || []);
-      const openCash = cashRes?.data || null;
+      setDashboard({ ...local.dashboard, ...(dashboardRes?.data || {}) });
+      setInvoices([...(invoicesRes?.data || []), ...local.invoices.filter((invoice: any) => invoice.status === 'pendiente')]);
+      setJournal(journalRes?.data || local.journal);
+      setMovements([...(movementsRes?.data || []), ...local.movements]);
+      setMovementTotals(movementsRes?.totalsByType || local.movementTotals);
+      const openCash = cashRes?.data || local.currentCash;
       setCurrentCash(openCash);
       if (openCash?.summary) {
         setCashForm((prev) => ({ ...prev, countedCash: String(Number(openCash.summary.expectedCash || 0)) }));
       }
       setClosings(closingsRes?.data || []);
-      setReport(reportRes?.data || null);
-    } catch (error: any) {
-      Alert.alert('Contabilidad', error.message || 'No se pudieron cargar los datos contables.');
+      setReport(reportRes?.data || local.report);
+    } catch {
+      const local = await buildLocalAccounting(filters);
+      setDashboard(local.dashboard);
+      setInvoices(local.invoices);
+      setJournal(local.journal);
+      setMovements(filters.movementType ? local.movements.filter((movement: any) => movement.type === filters.movementType) : local.movements);
+      setMovementTotals(local.movementTotals);
+      setCurrentCash(local.currentCash);
+      setReport(local.report);
+      if (local.currentCash?.summary) {
+        setCashForm((prev) => ({ ...prev, countedCash: String(Number(local.currentCash.summary.expectedCash || 0)) }));
+      }
     } finally {
       setRefreshing(false);
     }
-  }, [filters.endDate, filters.movementType, filters.startDate, queryParams]);
+  }, [filters, queryParams]);
 
   useEffect(() => {
     loadData();
@@ -165,7 +288,11 @@ export const ReportsScreen: React.FC = () => {
   const openCash = async () => {
     const openingAmount = Number(cashForm.openingAmount);
     if (!Number.isFinite(openingAmount) || openingAmount < 0) return Alert.alert('Caja', 'Monto inicial inválido.');
-    await api.openAccountingCash(openingAmount);
+    try {
+      await api.openAccountingCash(openingAmount);
+    } catch {
+      await api.openCashSession(openingAmount);
+    }
     Alert.alert('Caja', 'Caja abierta correctamente.');
     loadData();
   };
@@ -173,8 +300,13 @@ export const ReportsScreen: React.FC = () => {
   const closeCash = async () => {
     const countedCash = Number(cashForm.countedCash);
     if (!Number.isFinite(countedCash) || countedCash < 0) return Alert.alert('Caja', 'Efectivo contado inválido.');
-    await api.closeAccountingCash({ countedCash, observations: cashForm.observations });
-    Alert.alert('Caja', 'Cierre de caja guardado en MongoDB.');
+    try {
+      await api.closeAccountingCash({ countedCash, observations: cashForm.observations });
+      Alert.alert('Caja', 'Cierre de caja guardado en MongoDB.');
+    } catch {
+      await api.closeCashSession(countedCash, cashForm.observations);
+      Alert.alert('Caja', 'Cierre de caja guardado localmente.');
+    }
     loadData();
   };
 
@@ -182,9 +314,15 @@ export const ReportsScreen: React.FC = () => {
     const amount = Number(expenseForm.amount);
     if (!expenseForm.description.trim()) return Alert.alert('Gastos', 'La descripción es obligatoria.');
     if (!Number.isFinite(amount) || amount <= 0) return Alert.alert('Gastos', 'El monto debe ser mayor a 0.');
-    await api.createExpense({ ...expenseForm, amount, fecha: `${filters.endDate}T12:00:00.000Z` });
+    const payload = { ...expenseForm, amount, fecha: `${filters.endDate}T12:00:00.000Z`, date: `${filters.endDate}T12:00:00.000Z` };
+    await storeLocalExpense(payload);
+    try {
+      await api.createExpense(payload);
+      Alert.alert('Gastos', 'Gasto registrado y sincronizado.');
+    } catch {
+      Alert.alert('Gastos', 'Gasto registrado localmente. Se sincronizará cuando haya conexión.');
+    }
     setExpenseForm({ description: '', category: 'otros', amount: '', paymentMethod: 'cash', provider: '', receiptNumber: '' });
-    Alert.alert('Gastos', 'Gasto registrado y enviado a caja/diario/cierre.');
     loadData();
   };
 
