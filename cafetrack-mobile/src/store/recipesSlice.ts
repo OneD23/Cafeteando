@@ -155,6 +155,13 @@ const recipesSlice = createSlice({
   name: 'recipes',
   initialState,
   reducers: {
+    setProducts: (state, action: PayloadAction<Product[]>) => {
+      state.products = (action.payload || []).map(normalizeProduct);
+    },
+    setRecipes: (state, action: PayloadAction<Recipe[]>) => {
+      state.recipes = action.payload || [];
+    },
+
     // Añadir nuevo producto con receta
     addProduct: (state, action: PayloadAction<{
       product: Partial<Product> & Omit<Product, 'id' | 'recipeId'>;
@@ -266,6 +273,8 @@ const recipesSlice = createSlice({
 });
 
 export const {
+  setProducts,
+  setRecipes,
   addProduct,
   updateProduct,
   deleteProduct,

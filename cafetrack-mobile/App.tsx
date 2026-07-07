@@ -9,7 +9,7 @@ import { SpeedInsights } from '@vercel/speed-insights/react';
 import { store } from './src/store';
 import { fetchIngredients, setIngredients, setMovements } from './src/store/inventorySlice';
 import { setTaxEnabled } from './src/store/cartSlice';
-import { fetchProducts } from './src/store/recipesSlice';
+import { fetchProducts, setProducts, setRecipes } from './src/store/recipesSlice';
 import { hydrateJournal } from './src/store/accountingSlice';
 
 import LoginScreen from './src/screens/LoginScreen';
@@ -24,6 +24,8 @@ import { initLocalDb, syncPendingData } from './src/services/localDb';
 
 const Tab = createBottomTabNavigator();
 
+const PRODUCTS_KEY = 'cafetrack_products';
+const RECIPES_KEY = 'cafetrack_recipes';
 const INGREDIENTS_KEY = 'cafetrack_inventory_ingredients';
 const MOVEMENTS_KEY = 'cafetrack_inventory_movements';
 const JOURNAL_KEY = 'cafetrack_accounting_entries';
@@ -144,12 +146,16 @@ function AppContent() {
 
   React.useEffect(() => {
     const hydrateLocalState = async () => {
-      const [ingRaw, movRaw, jnlRaw, taxRaw] = await Promise.all([
+      const [productsRaw, recipesRaw, ingRaw, movRaw, jnlRaw, taxRaw] = await Promise.all([
+        AsyncStorage.getItem(PRODUCTS_KEY),
+        AsyncStorage.getItem(RECIPES_KEY),
         AsyncStorage.getItem(INGREDIENTS_KEY),
         AsyncStorage.getItem(MOVEMENTS_KEY),
         AsyncStorage.getItem(JOURNAL_KEY),
         AsyncStorage.getItem(TAX_ENABLED_KEY),
       ]);
+      if (productsRaw) store.dispatch(setProducts(JSON.parse(productsRaw)) as any);
+      if (recipesRaw) store.dispatch(setRecipes(JSON.parse(recipesRaw)) as any);
       if (ingRaw) store.dispatch(setIngredients(JSON.parse(ingRaw)) as any);
       if (movRaw) store.dispatch(setMovements(JSON.parse(movRaw)) as any);
       if (jnlRaw) store.dispatch(hydrateJournal(JSON.parse(jnlRaw)) as any);
@@ -162,6 +168,8 @@ function AppContent() {
       clearTimeout(persistTimeout);
       persistTimeout = setTimeout(async () => {
         const state = store.getState();
+        await AsyncStorage.setItem(PRODUCTS_KEY, JSON.stringify(state.recipes.products || []));
+        await AsyncStorage.setItem(RECIPES_KEY, JSON.stringify(state.recipes.recipes || []));
         await AsyncStorage.setItem(INGREDIENTS_KEY, JSON.stringify(state.inventory.ingredients || []));
         await AsyncStorage.setItem(MOVEMENTS_KEY, JSON.stringify(state.inventory.movements || []));
         await AsyncStorage.setItem(JOURNAL_KEY, JSON.stringify(state.accounting.entries || []));

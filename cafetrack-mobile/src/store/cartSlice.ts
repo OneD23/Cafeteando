@@ -12,6 +12,11 @@ const recipeIngredientId = (recipeItem: any) => {
   return typeof ingredientRef === 'object' ? entityId(ingredientRef) : String(ingredientRef ?? '');
 };
 
+const isServerStockDisagreement = (error: any) => {
+  const message = String(error?.data?.message || error?.message || '').toLowerCase();
+  return error?.status >= 400 && message.includes('stock') && (message.includes('insuficiente') || message.includes('sufficient'));
+};
+
 export interface CartItem {
   id: string;
   name: string;
@@ -179,10 +184,13 @@ export const processSale = createAsyncThunk(
       await api.createSale(salePayload);
       synced = true;
     } catch (error: any) {
-      if (error?.status) {
+      if (error?.status && !isServerStockDisagreement(error)) {
         throw error;
       }
-      await queueUnsynced('sale', salePayload);
+      await queueUnsynced('sale', {
+        ...salePayload,
+        syncWarning: isServerStockDisagreement(error) ? String(error?.data?.message || error?.message || 'Stock remoto desactualizado') : undefined,
+      });
     }
     
     return { success: true, timestamp: new Date().toISOString(), saleId, synced };
