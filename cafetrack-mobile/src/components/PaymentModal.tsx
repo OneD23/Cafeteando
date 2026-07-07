@@ -9,6 +9,7 @@ interface PaymentModalProps {
   total: number;
   loading?: boolean;
   clients?: Array<{ id?: string; name: string }>;
+  error?: string | null;
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({
@@ -18,6 +19,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
   total,
   loading,
   clients = [],
+  error,
 }) => {
   const [method, setMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [discount, setDiscount] = useState('');
@@ -67,6 +69,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
             <Text style={styles.totalLabel}>Total a pagar:</Text>
             <Text style={styles.totalValue}>${payableTotal.toFixed(2)}</Text>
           </View>
+
+          {error ? (
+            <View style={styles.errorBox}>
+              <Ionicons name="alert-circle-outline" size={18} color="#ffb4a8" />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
 
           <Text style={styles.sectionTitle}>Método de pago</Text>
           <View style={styles.methods}>
@@ -207,6 +216,22 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginTop: 5,
+  },
+  errorBox: {
+    backgroundColor: '#4a1f18',
+    borderColor: '#d96d61',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#ffb4a8',
+    flex: 1,
+    fontWeight: '700',
   },
   sectionTitle: {
     color: '#f5f1e8',

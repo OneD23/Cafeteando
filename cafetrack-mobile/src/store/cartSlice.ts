@@ -67,13 +67,18 @@ const calculateTotals = (items: CartItem[], discount = 0, taxEnabled = true) => 
 // Thunk para procesar venta con descuento de inventario
 export const processSale = createAsyncThunk(
   'cart/processSale',
-  async (payload: { paymentMethod: string; customerName?: string }, { getState, dispatch }) => {
+  async (payload: { paymentMethod: string; customerName?: string; discount?: number }, { getState, dispatch }) => {
     const state = getState() as {
       cart: CartState;
       recipes: { recipes: Array<{ productId: string; items: Array<{ ingredientId: string | any; ingredient?: string | any; quantity: number }> }> };
       inventory: { ingredients: Array<{ id: string; _id?: string; stock: number; name: string; costPerUnit?: number }> };
     };
-    const { items } = state.cart;
+    const { items, taxEnabled } = state.cart;
+    const discountAmount = Math.max(Number(payload.discount || 0), 0);
+    const subtotal = items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+    const sanitizedDiscount = Math.min(discountAmount, subtotal);
+    const taxableBase = Math.max(subtotal - sanitizedDiscount, 0);
+    const saleTotal = taxableBase + (taxEnabled ? taxableBase * 0.16 : 0);
     const saleId = `SALE-${Date.now()}`;
     let totalCost = 0;
     
@@ -113,7 +118,7 @@ export const processSale = createAsyncThunk(
 
     dispatch(recordSale({
       saleId,
-      revenue: state.cart.totals.total,
+      revenue: saleTotal,
       cogs: totalCost,
     }));
     const salePayload = {
@@ -126,9 +131,9 @@ export const processSale = createAsyncThunk(
       })),
       paymentMethod: payload.paymentMethod,
       customer: payload.customerName ? { name: payload.customerName } : undefined,
-      discount: { type: 'none', value: 0 },
-      total: state.cart.totals.total,
-      taxEnabled: state.cart.taxEnabled,
+      discount: sanitizedDiscount > 0 ? { type: 'fixed', value: sanitizedDiscount } : { type: 'none', value: 0 },
+      total: saleTotal,
+      taxEnabled,
       unsynced: true,
       localSaleId: saleId,
       syncId: saleId,
