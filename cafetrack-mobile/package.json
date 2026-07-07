@@ -9,7 +9,9 @@
     "ts:check": "tsc --noEmit",
     "check:screens": "node scripts/validate-screen-integrity.js",
     "lint": "npm run ts:check",
-    "test": "npm run ts:check && npm run check:screens"
+    "test": "npm run ts:check && npm run check:screens",
+    "build": "expo export --platform web && node scripts/copy-public-web-assets.js",
+    "export:web": "expo export --platform web && node scripts/copy-public-web-assets.js"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
