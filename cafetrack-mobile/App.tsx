@@ -29,6 +29,17 @@ const MOVEMENTS_KEY = 'cafetrack_inventory_movements';
 const JOURNAL_KEY = 'cafetrack_accounting_entries';
 const TAX_ENABLED_KEY = 'cafetrack_tax_enabled';
 
+const registerWebServiceWorker = () => {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return;
+  }
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch((error) => {
+      console.warn('No se pudo registrar el modo offline web:', error);
+    });
+  });
+};
 
 function MainTabs() {
   return (
@@ -105,6 +116,7 @@ function AppContent() {
   }, []);
 
   React.useEffect(() => {
+    registerWebServiceWorker();
     initLocalDb();
     const syncTimer = setInterval(() => {
       syncPendingData();
