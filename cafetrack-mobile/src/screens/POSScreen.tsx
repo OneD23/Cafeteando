@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSelector, useDispatch } from "react-redux";
 import { Ionicons } from "@expo/vector-icons";
-import { addToCart, clearCart, processSale, removeFromCart, setDiscount, updateQuantity } from "../store/cartSlice";
+import { addToCart, clearCart, processSale, removeFromCart, updateQuantity } from "../store/cartSlice";
 import { PaymentModal } from "../components/PaymentModal";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api from "../api/client";
@@ -73,6 +73,7 @@ const POSScreen: React.FC = () => {
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const [optionProduct, setOptionProduct] = useState<any>(null);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, any>>({});
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const hasInventoryData = ingredients.length > 0;
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
@@ -245,6 +246,7 @@ const POSScreen: React.FC = () => {
       Alert.alert("Carrito vacío", "Agrega al menos un producto para continuar.");
       return;
     }
+    setPaymentError(null);
     setShowPaymentModal(true);
   };
 
@@ -254,17 +256,25 @@ const POSScreen: React.FC = () => {
     customer?: { name: string } | null;
   }) => {
     const saleItems = [...cartItems];
-    const saleTotals = { ...totals };
+    const discountAmount = Math.max(Number(paymentData.discount || 0), 0);
+    const subtotal = saleItems.reduce((sum: number, item: any) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0);
+    const sanitizedDiscount = Math.min(discountAmount, subtotal);
+    const taxableBase = Math.max(subtotal - sanitizedDiscount, 0);
+    const saleTotals = {
+      subtotal,
+      discount: sanitizedDiscount,
+      tax: totals.tax > 0 ? taxableBase * 0.16 : 0,
+      total: taxableBase + (totals.tax > 0 ? taxableBase * 0.16 : 0),
+    };
 
     try {
-      if (paymentData.discount > 0) {
-        dispatch(setDiscount({ type: "fixed", value: paymentData.discount }));
-      }
+      setPaymentError(null);
 
       const result = await dispatch(
         processSale({
           paymentMethod: paymentData.method,
           customerName: paymentData.customer?.name,
+          discount: sanitizedDiscount,
         }) as any
       ).unwrap();
       if (!result.synced) {
@@ -287,7 +297,9 @@ const POSScreen: React.FC = () => {
       setShowPaymentModal(false);
       printInvoice(result.saleId, saleItems, saleTotals);
     } catch (error: any) {
-      Alert.alert("No se pudo completar", error?.message || "Error al procesar la venta");
+      const message = error?.data?.message || error?.message || "Error al procesar la venta";
+      setPaymentError(message);
+      Alert.alert("No se pudo completar", message);
     }
   };
 
@@ -581,11 +593,12 @@ const POSScreen: React.FC = () => {
       </Modal>
       <PaymentModal
         visible={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
+        onClose={() => { setPaymentError(null); setShowPaymentModal(false); }}
         onConfirm={handleConfirmPayment}
         total={totals.total}
         loading={processingSale}
         clients={clients}
+        error={paymentError}
       />
       <Modal visible={cashOpenModal} transparent animationType="slide">
         <KeyboardAvoidingView
