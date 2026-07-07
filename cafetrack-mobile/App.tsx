@@ -7,7 +7,7 @@ import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { store } from './src/store';
-import { fetchIngredients, setMovements } from './src/store/inventorySlice';
+import { fetchIngredients, setIngredients, setMovements } from './src/store/inventorySlice';
 import { setTaxEnabled } from './src/store/cartSlice';
 import { fetchProducts } from './src/store/recipesSlice';
 import { hydrateJournal } from './src/store/accountingSlice';
@@ -24,10 +24,22 @@ import { initLocalDb, syncPendingData } from './src/services/localDb';
 
 const Tab = createBottomTabNavigator();
 
+const INGREDIENTS_KEY = 'cafetrack_inventory_ingredients';
 const MOVEMENTS_KEY = 'cafetrack_inventory_movements';
 const JOURNAL_KEY = 'cafetrack_accounting_entries';
 const TAX_ENABLED_KEY = 'cafetrack_tax_enabled';
 
+const registerWebServiceWorker = () => {
+  if (Platform.OS !== 'web' || typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return;
+  }
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch((error) => {
+      console.warn('No se pudo registrar el modo offline web:', error);
+    });
+  });
+};
 
 function MainTabs() {
   return (
@@ -104,6 +116,7 @@ function AppContent() {
   }, []);
 
   React.useEffect(() => {
+    registerWebServiceWorker();
     initLocalDb();
     const syncTimer = setInterval(() => {
       syncPendingData();
@@ -117,19 +130,27 @@ function AppContent() {
       if (!token) return;
       try {
         const me = await api.me();
-        if (me?.user) store.dispatch({ type: 'auth/setUser', payload: me.user } as any);
-      } catch {}
+        if (me?.user) {
+          await AsyncStorage.setItem('cafetrack_last_user', JSON.stringify(me.user));
+          store.dispatch({ type: 'auth/setUser', payload: me.user } as any);
+        }
+      } catch {
+        const cachedUser = await AsyncStorage.getItem('cafetrack_last_user');
+        if (cachedUser) store.dispatch({ type: 'auth/setUser', payload: JSON.parse(cachedUser) } as any);
+      }
     };
     restoreSession();
   }, []);
 
   React.useEffect(() => {
     const hydrateLocalState = async () => {
-      const [movRaw, jnlRaw, taxRaw] = await Promise.all([
+      const [ingRaw, movRaw, jnlRaw, taxRaw] = await Promise.all([
+        AsyncStorage.getItem(INGREDIENTS_KEY),
         AsyncStorage.getItem(MOVEMENTS_KEY),
         AsyncStorage.getItem(JOURNAL_KEY),
         AsyncStorage.getItem(TAX_ENABLED_KEY),
       ]);
+      if (ingRaw) store.dispatch(setIngredients(JSON.parse(ingRaw)) as any);
       if (movRaw) store.dispatch(setMovements(JSON.parse(movRaw)) as any);
       if (jnlRaw) store.dispatch(hydrateJournal(JSON.parse(jnlRaw)) as any);
       if (taxRaw === 'true' || taxRaw === 'false') store.dispatch(setTaxEnabled(taxRaw === 'true') as any);
@@ -141,6 +162,7 @@ function AppContent() {
       clearTimeout(persistTimeout);
       persistTimeout = setTimeout(async () => {
         const state = store.getState();
+        await AsyncStorage.setItem(INGREDIENTS_KEY, JSON.stringify(state.inventory.ingredients || []));
         await AsyncStorage.setItem(MOVEMENTS_KEY, JSON.stringify(state.inventory.movements || []));
         await AsyncStorage.setItem(JOURNAL_KEY, JSON.stringify(state.accounting.entries || []));
         await AsyncStorage.setItem(TAX_ENABLED_KEY, String(state.cart.taxEnabled));

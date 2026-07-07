@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { consumeIngredients } from './inventorySlice';
 import { recordSale } from './accountingSlice';
@@ -49,6 +50,37 @@ const initialState: CartState = {
   },
   processingSale: false,
   taxEnabled: true,
+};
+
+
+const addSaleToLocalCashSession = async (paymentMethod: string, total: number) => {
+  const raw = await AsyncStorage.getItem('cafetrack_cash_session');
+  if (!raw) return;
+  const session = JSON.parse(raw);
+  if (!session?.isOpen) return;
+
+  const summary = session.summary || { expectedCash: Number(session.openingAmount || 0), totals: { sales: 0 }, paymentMethods: [] };
+  const paymentMethods = Array.isArray(summary.paymentMethods) ? [...summary.paymentMethods] : [];
+  const methodIndex = paymentMethods.findIndex((row: any) => row.method === paymentMethod);
+  if (methodIndex >= 0) {
+    paymentMethods[methodIndex] = {
+      ...paymentMethods[methodIndex],
+      total: Number(paymentMethods[methodIndex].total || 0) + total,
+    };
+  } else {
+    paymentMethods.push({ method: paymentMethod, total });
+  }
+
+  const expectedCash = Number(summary.expectedCash || session.openingAmount || 0) + (paymentMethod === 'cash' ? total : 0);
+  await AsyncStorage.setItem('cafetrack_cash_session', JSON.stringify({
+    ...session,
+    summary: {
+      ...summary,
+      expectedCash,
+      totals: { ...(summary.totals || {}), sales: Number(summary.totals?.sales || 0) + total },
+      paymentMethods,
+    },
+  }));
 };
 
 const calculateTotals = (items: CartItem[], discount = 0, taxEnabled = true) => {
@@ -139,6 +171,8 @@ export const processSale = createAsyncThunk(
       syncId: saleId,
       idempotencyKey: saleId,
     };
+
+    await addSaleToLocalCashSession(payload.paymentMethod, saleTotal);
 
     let synced = false;
     try {
