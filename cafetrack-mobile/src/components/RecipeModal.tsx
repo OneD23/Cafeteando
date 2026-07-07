@@ -37,7 +37,7 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
     () => recipes.find((r: any) => String(r.productId) === editingProductId),
     [recipes, editingProductId]
   );
-  
+
   const [name, setName] = useState(editingProduct?.name || '');
   const [price, setPrice] = useState(editingProduct?.price?.toString() || '');
   const [category, setCategory] = useState(editingProduct?.category || 'coffee');
@@ -66,20 +66,25 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
   ];
 
 
+  const selectedIngredientId = (item: RecipeItem) => {
+    const ingredientRef = item?.ingredientId ?? (item as any)?.ingredient;
+    return typeof ingredientRef === 'object' ? entityId(ingredientRef) : String(ingredientRef ?? '');
+  };
+
   const toggleIngredient = (ingredient: Ingredient) => {
     const ingId = entityId(ingredient);
-    const exists = selectedIngredients.find(i => String(i.ingredientId) === ingId);
+    const exists = selectedIngredients.find(i => selectedIngredientId(i) === ingId);
     if (exists) {
-      setSelectedIngredients(selectedIngredients.filter(i => String(i.ingredientId) !== ingId));
+      setSelectedIngredients(selectedIngredients.filter(i => selectedIngredientId(i) !== ingId));
     } else {
       setSelectedIngredients([...selectedIngredients, { ingredientId: ingId, quantity: 0 }]);
     }
   };
 
   const updateQuantity = (ingredientId: string, qty: string) => {
-    setSelectedIngredients(selectedIngredients.map(item => 
-      item.ingredientId === ingredientId 
-        ? { ...item, quantity: parseFloat(qty) || 0 }
+    setSelectedIngredients(selectedIngredients.map(item =>
+      selectedIngredientId(item) === ingredientId
+        ? { ingredientId, quantity: parseFloat(qty) || 0 }
         : item
     ));
   };
@@ -157,7 +162,9 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       return;
     }
 
-    const validItems = selectedIngredients.filter(i => i.quantity > 0);
+    const validItems = selectedIngredients
+      .map((i) => ({ ingredientId: selectedIngredientId(i), quantity: Number(i.quantity || 0) }))
+      .filter((i) => i.ingredientId && i.quantity > 0);
     if (validItems.length === 0) {
       Alert.alert('Error', 'Las cantidades deben ser mayores a 0');
       return;
@@ -179,6 +186,18 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
       preparationTime: parseInt(prepTime) || 2,
       image: productImage || undefined,
     };
+
+    const localProductId = editingProductId || `prod-${Date.now()}`;
+
+    if (editingProductId) {
+      dispatch(updateProduct({ id: editingProductId, ...productPayload }));
+      dispatch(updateRecipe({ productId: editingProductId, ...recipePayload }));
+    } else {
+      dispatch(addProduct({
+        product: { ...productPayload, id: localProductId, recipeId: `rec-${Date.now()}` },
+        recipe: { ...recipePayload, productId: localProductId },
+      }));
+    }
 
     try {
       if (editingProductId) {
@@ -204,29 +223,22 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
           ? savedProduct.recipeId
           : recipePayload;
 
-        if (savedProduct && savedProductId) {
-          dispatch(addProduct({
-            product: savedProduct,
-            recipe: { ...savedRecipe, productId: savedProductId },
-          }));
-        } else {
-          dispatch(addProduct({
-            product: productPayload,
-            recipe: recipePayload,
-          }));
+        if (savedProduct && savedProductId && savedProductId !== localProductId) {
+          dispatch(updateProduct({ id: localProductId, ...savedProduct }));
+          dispatch(updateRecipe({ productId: savedProductId, ...savedRecipe, ...recipePayload }));
         }
       }
-
-      // Reset
-      setName('');
-      setPrice('');
-      setProductImage('');
-      setSelectedIngredients([]);
-      setOptions([]);
-      onClose();
     } catch (error: any) {
-      Alert.alert('Error', error?.message || 'No se pudo guardar la receta');
+      console.warn('Receta guardada localmente; sincronización pendiente:', error?.message || error);
     }
+
+    // Reset
+    setName('');
+    setPrice('');
+    setProductImage('');
+    setSelectedIngredients([]);
+    setOptions([]);
+    onClose();
   };
 
   const calculateCost = () => {
@@ -381,29 +393,29 @@ export const RecipeModal: React.FC<RecipeModalProps> = ({
             <Text style={styles.label}>Ingredientes y gramaje</Text>
             {ingredients.map((ing: Ingredient) => (
               <View key={entityId(ing)} style={styles.ingredientRow}>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.ingredientCheck}
                   onPress={() => toggleIngredient(ing)}
                 >
-                  <Ionicons 
-                    name={selectedIngredients.find(i => String(i.ingredientId) === entityId(ing)) ? 'checkbox' : 'square-outline'} 
-                    size={24} 
-                    color="#d4a574" 
+                  <Ionicons
+                    name={selectedIngredients.find(i => selectedIngredientId(i) === entityId(ing)) ? 'checkbox' : 'square-outline'}
+                    size={24}
+                    color="#d4a574"
                   />
                   <View style={styles.ingredientInfo}>
                     <Text style={styles.ingredientName}>{ing.name}</Text>
                     <Text style={styles.ingredientUnit}>Stock: {ing.stock} {ing.unit}</Text>
                   </View>
                 </TouchableOpacity>
-                
-                {selectedIngredients.find(i => String(i.ingredientId) === entityId(ing)) && (
+
+                {selectedIngredients.find(i => selectedIngredientId(i) === entityId(ing)) && (
                   <View style={styles.qtyInputWrap}>
                     <TextInput
                       style={styles.qtyInput}
                       placeholder={`0 ${ing.unit}`}
                       placeholderTextColor="#8b6f4e"
                       keyboardType="decimal-pad"
-                      value={(selectedIngredients.find(i => String(i.ingredientId) === entityId(ing))?.quantity || '').toString()}
+                      value={(selectedIngredients.find(i => selectedIngredientId(i) === entityId(ing))?.quantity || '').toString()}
                       onChangeText={(text) => updateQuantity(entityId(ing), text)}
                     />
                     <Text style={styles.qtyUnitBadge}>{ing.unit}</Text>
