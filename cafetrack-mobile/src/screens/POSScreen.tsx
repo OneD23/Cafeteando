@@ -69,6 +69,7 @@ const POSScreen: React.FC = () => {
   const [countedCash, setCountedCash] = useState("0");
   const [cashExpected, setCashExpected] = useState(0);
   const [cashSummary, setCashSummary] = useState<any>(null);
+  const [cashCloseSales, setCashCloseSales] = useState<any[]>([]);
   const [cashSessionOpen, setCashSessionOpen] = useState(false);
   const [clients, setClients] = useState<Array<{ id?: string; name: string }>>([]);
   const [optionProduct, setOptionProduct] = useState<any>(null);
@@ -78,6 +79,14 @@ const POSScreen: React.FC = () => {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const productColumns = width >= 1500 ? 4 : width >= 1000 ? 3 : 2;
+
+  const loadCashCloseSales = React.useCallback(async () => {
+    const rawSales = await AsyncStorage.getItem(SALES_STORAGE_KEY);
+    const sales = rawSales ? JSON.parse(rawSales) : [];
+    const today = new Date().toDateString();
+    setCashCloseSales(sales.filter((s: any) => new Date(s.date).toDateString() === today));
+  }, []);
+
   const refreshCashState = React.useCallback(async () => {
     const remote = await api.getCashSession();
     const cs = remote?.data || { isOpen: false };
@@ -405,7 +414,7 @@ const POSScreen: React.FC = () => {
         <View style={styles.statsCard}>
           <Text style={styles.statLabel}>Total actual</Text>
           <Text style={styles.statTotal}>${totals.total.toFixed(2)}</Text>
-          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
+          <TouchableOpacity style={[styles.cashPill, cashSessionOpen ? styles.cashPillOpen : styles.cashPillClosed]} onPress={async () => { await refreshCashState(); await loadCashCloseSales(); setCashOpenModal(true); }}>
             <View style={[styles.cashDot, { backgroundColor: cashSessionOpen ? '#12b76a' : '#f04438' }]} />
             <Text style={styles.cashPillText}>{cashSessionOpen ? 'Caja abierta' : 'Caja cerrada'}</Text>
           </TouchableOpacity>
@@ -543,7 +552,7 @@ const POSScreen: React.FC = () => {
             <Text style={styles.cartTotalLabel}>TOTAL</Text>
             <Text style={styles.cartTotalValue}>${totals.total.toFixed(2)}</Text>
           </View>
-          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={async () => { await refreshCashState(); setCashOpenModal(true); }}>
+          <TouchableOpacity style={[styles.cashControlBtn, { backgroundColor: cashSessionOpen ? '#c0392b' : '#27ae60' }]} onPress={async () => { await refreshCashState(); await loadCashCloseSales(); setCashOpenModal(true); }}>
             <Text style={styles.cashControlText}>{cashSessionOpen ? 'Cerrar caja' : 'Abrir caja'}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.checkoutButton} onPress={handleCompleteSale}>
@@ -625,6 +634,20 @@ const POSScreen: React.FC = () => {
               <View style={styles.cashBreakdownCard}>
                 <Text style={styles.cashBreakdownText}>Ventas del turno: ${cashTurnSales.toFixed(2)}</Text>
                 <Text style={styles.cashBreakdownText}>Efectivo: ${cashPaymentTotal('cash').toFixed(2)} · Tarjeta: ${cashPaymentTotal('card').toFixed(2)} · Transferencia: ${cashPaymentTotal('transfer').toFixed(2)}</Text>
+              </View>
+              <View style={styles.cashBreakdownCard}>
+                <Text style={styles.cashBreakdownTitle}>Detalle vendido hoy</Text>
+                {cashCloseSales.length === 0 ? (
+                  <Text style={styles.cashBreakdownText}>No hay ventas locales registradas para hoy.</Text>
+                ) : cashCloseSales.map((sale: any) => (
+                  <View key={sale.saleId} style={styles.cashSaleRow}>
+                    <Text style={styles.cashSaleTitle}>{sale.saleId} · {sale.paymentMethod || 'pago'}</Text>
+                    {(sale.items || []).map((item: any, index: number) => (
+                      <Text key={`${sale.saleId}-${item.id || index}`} style={styles.cashBreakdownText}>• {item.name} x{item.qty || item.quantity} · ${Number(item.price || 0).toFixed(2)} c/u</Text>
+                    ))}
+                    <Text style={styles.cashSaleTotal}>Total: ${Number(sale.total || 0).toFixed(2)}</Text>
+                  </View>
+                ))}
               </View>
               <TextInput style={styles.searchInput} value={countedCash} onChangeText={setCountedCash} keyboardType="decimal-pad" placeholder="Efectivo contado" placeholderTextColor="#8b6f4e" />
               <TouchableOpacity style={[styles.checkoutButton, { backgroundColor: '#c0392b' }]} onPress={async () => {
@@ -1062,6 +1085,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
   },
+  cashBreakdownTitle: { color: '#f5f1e8', fontWeight: '900', marginBottom: 6 },
+  cashSaleRow: { borderTopWidth: 1, borderTopColor: '#4a3428', paddingTop: 8, marginTop: 8 },
+  cashSaleTitle: { color: '#f5f1e8', fontWeight: '800', marginBottom: 4 },
+  cashSaleTotal: { color: '#27ae60', fontWeight: '900', marginTop: 4 },
   cashBreakdownText: {
     color: '#d8c6b2',
     fontSize: 12,
