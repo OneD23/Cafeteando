@@ -129,10 +129,17 @@ class ApiClient {
     });
   }
 
-  async restockIngredient(id: string, quantity: number, reason?: string) {
+  async restockIngredient(id: string, quantity: number, reason?: string, location: 'warehouse' | 'greca' = 'warehouse') {
     return this.request(`/ingredients/${id}/restock`, {
       method: 'POST',
-      body: JSON.stringify({ quantity, reason }),
+      body: JSON.stringify({ quantity, reason, location }),
+    });
+  }
+
+  async transferIngredient(id: string, quantity: number, direction: 'to_greca' | 'to_warehouse', reason?: string) {
+    return this.request(`/ingredients/${id}/transfer`, {
+      method: 'POST',
+      body: JSON.stringify({ quantity, direction, reason }),
     });
   }
   async deleteIngredient(id: string) {

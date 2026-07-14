@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const movementSchema = new mongoose.Schema({
   type: {
     type: String,
-    enum: ['sale', 'restock', 'adjustment', 'waste', 'recipe_deduction', 'production', 'component_consumption'],
+    enum: ['sale', 'restock', 'adjustment', 'waste', 'recipe_deduction', 'production', 'component_consumption', 'transfer_to_greca', 'transfer_to_warehouse'],
     required: true
   },
   ingredient: {
@@ -23,6 +23,13 @@ const movementSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  location: {
+    type: String,
+    enum: ['greca', 'warehouse'],
+    default: 'greca'
+  },
+  previousWarehouseStock: Number,
+  newWarehouseStock: Number,
   reason: {
     type: String,
     required: true

@@ -24,6 +24,7 @@ import {
   deleteIngredient,
   restockIngredient,
   adjustStock,
+  transferIngredient,
 } from '../store/inventorySlice';
 import { deleteProductFromServer, updateProductActive } from '../store/recipesSlice';
 import { addJournalEntry } from '../store/accountingSlice';
@@ -46,6 +47,7 @@ export const InventoryScreen: React.FC = () => {
   const [ingName, setIngName] = useState('');
   const [ingUnit, setIngUnit] = useState('g');
   const [ingStock, setIngStock] = useState('');
+  const [ingWarehouseStock, setIngWarehouseStock] = useState('');
   const [ingMinStock, setIngMinStock] = useState('');
   const [ingTotalCost, setIngTotalCost] = useState('');
   const [ingPackageCount, setIngPackageCount] = useState('');
@@ -67,14 +69,16 @@ export const InventoryScreen: React.FC = () => {
 
   const calculatedUnitCost = useMemo(() => {
     const stock = parseFloat(ingStock);
+    const warehouseStock = parseFloat(ingWarehouseStock || '0') || 0;
+    const totalAvailable = stock + warehouseStock;
     const totalCost = parseFloat(ingTotalCost);
 
-    if (!Number.isFinite(stock) || stock <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
+    if (!Number.isFinite(totalAvailable) || totalAvailable <= 0 || !Number.isFinite(totalCost) || totalCost < 0) {
       return 0;
     }
 
-    return totalCost / stock;
-  }, [ingStock, ingTotalCost]);
+    return totalCost / totalAvailable;
+  }, [ingStock, ingWarehouseStock, ingTotalCost]);
 
   const entityId = (entity: any): string => String(entity?.id ?? entity?._id ?? '');
 
@@ -121,6 +125,7 @@ export const InventoryScreen: React.FC = () => {
     setIngUnit('g');
     setIngStock('');
     setIngMinStock('');
+    setIngWarehouseStock('');
     setIngTotalCost('');
     setIngPackageCount('');
     setIngQuantityPerPackage('');
@@ -169,6 +174,7 @@ export const InventoryScreen: React.FC = () => {
       name: ingName,
       unit: ingUnit as any,
       stock: stockQuantity,
+      warehouseStock: parseFloat(ingWarehouseStock || '0') || 0,
       minStock: parseFloat(ingMinStock),
       costPerUnit: calculatedUnitCost,
       components,
@@ -192,13 +198,13 @@ export const InventoryScreen: React.FC = () => {
   };
 
   const handleRestock = (ingredient: any) => {
-    requestNumericInput('Reposición', `Cantidad a añadir a ${ingredient.name}:`, (qty) => {
+    requestNumericInput('Reposición a almacén', `Cantidad a añadir al almacén de ${ingredient.name}:`, (qty) => {
       if (qty <= 0) return;
 
       dispatch(restockIngredient({
         ingredientId: entityId(ingredient),
         quantity: qty,
-        reason: 'Reposición manual',
+        reason: 'Reposición a almacén',
       }));
       dispatch(addJournalEntry({
         direction: 'in',
@@ -206,6 +212,19 @@ export const InventoryScreen: React.FC = () => {
         description: `Reposición: ${ingredient.name}`,
         amount: qty * (ingredient.costPerUnit || 0),
       }));
+    });
+  };
+
+  const handleTransferToGreca = (ingredient: any) => {
+    requestNumericInput('Trasladar a greca', `Cantidad a pasar de almacén a greca para ${ingredient.name}:`, (qty) => {
+      if (qty <= 0) return;
+
+      dispatch(transferIngredient({
+        ingredientId: entityId(ingredient),
+        quantity: qty,
+        direction: 'to_greca',
+        reason: 'Traslado de almacén a greca',
+      }) as any);
     });
   };
 
@@ -308,14 +327,15 @@ export const InventoryScreen: React.FC = () => {
             <Text style={styles.ingredientUnit}>Unidad: {item.unit}</Text>
           </View>
           <View style={[styles.stockBadge, isLowStock && styles.lowStockBadge]}>
-            <Text style={styles.stockText} numberOfLines={1}>{item.stock} {item.unit}</Text>
+            <Text style={styles.stockText} numberOfLines={1}>Greca: {item.stock} {item.unit}</Text>
           </View>
         </View>
 
         <View style={styles.ingredientDetails}>
-          <Text style={styles.detailText}>Stock mínimo: {item.minStock} {item.unit}</Text>
+          <Text style={styles.detailText}>Almacén: {item.warehouseStock || 0} {item.unit}</Text>
+          <Text style={styles.detailText}>Stock mínimo greca: {item.minStock} {item.unit}</Text>
           <Text style={styles.detailText}>Costo: ${item.costPerUnit.toFixed(3)}/{item.unit}</Text>
-          <Text style={styles.detailText}>Valor total: ${(item.stock * item.costPerUnit).toFixed(2)}</Text>
+          <Text style={styles.detailText}>Valor total: ${(((item.stock || 0) + (item.warehouseStock || 0)) * item.costPerUnit).toFixed(2)}</Text>
         </View>
 
         {item.components?.length > 0 && (
@@ -339,9 +359,14 @@ export const InventoryScreen: React.FC = () => {
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => handleRestock(item)}>
             <Ionicons name="add-circle" size={20} color="#27ae60" />
-            <Text style={styles.actionText}>Reponer</Text>
+            <Text style={styles.actionText}>Reponer almacén</Text>
           </TouchableOpacity>
           
+          <TouchableOpacity style={styles.actionBtn} onPress={() => handleTransferToGreca(item)}>
+            <Ionicons name="swap-horizontal" size={20} color="#3498db" />
+            <Text style={styles.actionText}>A greca</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={styles.actionBtn}
             onPress={() => {
@@ -349,8 +374,9 @@ export const InventoryScreen: React.FC = () => {
               setIngName(item.name || '');
               setIngUnit(item.unit || 'g');
               setIngStock(String(item.stock ?? ''));
+              setIngWarehouseStock(String(item.warehouseStock ?? 0));
               setIngMinStock(String(item.minStock ?? ''));
-              setIngTotalCost(String(((item.stock || 0) * (item.costPerUnit || 0)).toFixed(2)));
+              setIngTotalCost(String((((item.stock || 0) + (item.warehouseStock || 0)) * (item.costPerUnit || 0)).toFixed(2)));
               setIngPackageCount('');
               setIngQuantityPerPackage('');
               setIngComponents(normalizeComponentsForForm(item.components || []));
@@ -631,7 +657,7 @@ export const InventoryScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Stock inicial total ({ingUnit})</Text>
+            <Text style={styles.inputLabel}>Stock en greca / cafeteando ({ingUnit})</Text>
             <TextInput
               style={styles.modalInput}
               value={ingStock}
@@ -641,7 +667,17 @@ export const InventoryScreen: React.FC = () => {
               placeholderTextColor="#8b6f4e"
             />
 
-            <Text style={styles.inputLabel}>Stock mínimo</Text>
+            <Text style={styles.inputLabel}>Stock en almacén ({ingUnit})</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={ingWarehouseStock}
+              onChangeText={setIngWarehouseStock}
+              keyboardType="decimal-pad"
+              placeholder="0"
+              placeholderTextColor="#8b6f4e"
+            />
+
+            <Text style={styles.inputLabel}>Stock mínimo en greca</Text>
             <TextInput
               style={styles.modalInput}
               value={ingMinStock}
@@ -692,7 +728,7 @@ export const InventoryScreen: React.FC = () => {
                         />
                         <View style={styles.componentIngredientInfo}>
                           <Text style={styles.componentIngredientName} numberOfLines={1}>{option.name}</Text>
-                          <Text style={styles.componentIngredientUnit}>Stock: {option.stock} {option.unit}</Text>
+                          <Text style={styles.componentIngredientUnit}>Greca: {option.stock} {option.unit} · Almacén: {option.warehouseStock || 0} {option.unit}</Text>
                         </View>
                       </TouchableOpacity>
 

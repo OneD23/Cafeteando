@@ -34,7 +34,7 @@ const assertValidComponents = (ingredientId, components = []) => {
 router.get('/', protect, async (req, res) => {
   try {
     const ingredients = await Ingredient.find({ isActive: true })
-      .populate('components.ingredientId', 'name unit stock costPerUnit isActive')
+      .populate('components.ingredientId', 'name unit stock warehouseStock costPerUnit isActive')
       .sort({ name: 1 });
 
     res.json({
@@ -143,7 +143,7 @@ router.put('/:id', protect, async (req, res) => {
 // @access  Private
 router.get('/:id/composition', protect, async (req, res) => {
   try {
-    const ingredient = await Ingredient.findById(req.params.id).populate('components.ingredientId', 'name unit stock costPerUnit isActive');
+    const ingredient = await Ingredient.findById(req.params.id).populate('components.ingredientId', 'name unit stock warehouseStock costPerUnit isActive');
     if (!ingredient) return res.status(404).json({ success: false, message: 'Ingrediente no encontrado' });
     const unitCost = await calculateCompositeUnitCost(ingredient, { loadIngredient: loadIngredientById() });
     const expansion = await expandIngredientRequirements(ingredient.components || [], { loadIngredient: loadIngredientById(), path: [String(ingredient._id)] });
@@ -210,15 +210,21 @@ router.post('/:id/restock', protect, async (req, res) => {
   session.startTransaction();
 
   try {
-    const { quantity, reason } = req.body;
+    const { quantity, reason, location = 'warehouse' } = req.body;
     const ingredient = await Ingredient.findById(req.params.id).session(session);
 
     if (!ingredient) {
       throw new Error('Ingrediente no encontrado');
     }
 
+    const targetLocation = location === 'greca' ? 'greca' : 'warehouse';
     const previousStock = ingredient.stock;
-    ingredient.stock += quantity;
+    const previousWarehouseStock = ingredient.warehouseStock || 0;
+    if (targetLocation === 'greca') {
+      ingredient.stock = roundQuantity(ingredient.stock + quantity);
+    } else {
+      ingredient.warehouseStock = roundQuantity((ingredient.warehouseStock || 0) + quantity);
+    }
     ingredient.lastRestocked = new Date();
     await ingredient.save({ session });
 
@@ -229,7 +235,10 @@ router.post('/:id/restock', protect, async (req, res) => {
       quantity,
       previousStock,
       newStock: ingredient.stock,
-      reason: reason || 'Reposición manual',
+      location: targetLocation,
+      previousWarehouseStock,
+      newWarehouseStock: ingredient.warehouseStock || 0,
+      reason: reason || (targetLocation === 'warehouse' ? 'Reposición a almacén' : 'Reposición a greca'),
       user: req.user._id
     }], { session, ordered: true });
 
@@ -240,7 +249,7 @@ router.post('/:id/restock', protect, async (req, res) => {
       ingredient,
       movement: {
         quantity,
-        reason: reason || 'Reposición manual'
+        reason: reason || (targetLocation === 'warehouse' ? 'Reposición a almacén' : 'Reposición a greca')
       }
     });
 
@@ -255,6 +264,62 @@ router.post('/:id/restock', protect, async (req, res) => {
       success: false,
       message: error.message
     });
+  } finally {
+    session.endSession();
+  }
+});
+
+
+// @route   POST /api/ingredients/:id/transfer
+// @desc    Transferir stock entre almacén y greca
+// @access  Private
+router.post('/:id/transfer', protect, async (req, res) => {
+  const session = await Ingredient.startSession();
+  session.startTransaction();
+
+  try {
+    const quantity = Number(req.body?.quantity);
+    const direction = req.body?.direction === 'to_warehouse' ? 'to_warehouse' : 'to_greca';
+    const reason = req.body?.reason;
+
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('quantity debe ser mayor a 0');
+
+    const ingredient = await Ingredient.findById(req.params.id).session(session);
+    if (!ingredient) throw new Error('Ingrediente no encontrado');
+
+    const previousStock = ingredient.stock;
+    const previousWarehouseStock = ingredient.warehouseStock || 0;
+
+    if (direction === 'to_greca') {
+      if (previousWarehouseStock < quantity) throw new Error(`Stock insuficiente en almacén para ${ingredient.name}`);
+      ingredient.warehouseStock = roundQuantity(previousWarehouseStock - quantity);
+      ingredient.stock = roundQuantity(previousStock + quantity);
+    } else {
+      if (previousStock < quantity) throw new Error(`Stock insuficiente en greca para ${ingredient.name}`);
+      ingredient.stock = roundQuantity(previousStock - quantity);
+      ingredient.warehouseStock = roundQuantity(previousWarehouseStock + quantity);
+    }
+
+    await ingredient.save({ session });
+    await InventoryMovement.create([{
+      type: direction === 'to_greca' ? 'transfer_to_greca' : 'transfer_to_warehouse',
+      ingredient: ingredient._id,
+      quantity,
+      previousStock,
+      newStock: ingredient.stock,
+      location: direction === 'to_greca' ? 'greca' : 'warehouse',
+      previousWarehouseStock,
+      newWarehouseStock: ingredient.warehouseStock,
+      reason: reason || (direction === 'to_greca' ? 'Traslado de almacén a greca' : 'Devolución de greca a almacén'),
+      user: req.user._id
+    }], { session, ordered: true });
+
+    await session.commitTransaction();
+    req.app.get('io').emit('inventory:updated', [ingredient]);
+    res.json({ success: true, data: ingredient });
+  } catch (error) {
+    await session.abortTransaction();
+    res.status(400).json({ success: false, message: error.message });
   } finally {
     session.endSession();
   }
