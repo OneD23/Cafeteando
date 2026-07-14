@@ -33,8 +33,16 @@ const ingredientSchema = new mongoose.Schema({
     enum: ['g', 'ml', 'unidad', 'oz'],
     default: 'g'
   },
+  // Stock disponible en la greca / punto de preparación (se descuenta al vender)
   stock: { 
     type: Number, 
+    required: true,
+    default: 0,
+    min: 0
+  },
+  // Stock de respaldo guardado en almacén (no se descuenta por ventas hasta transferirlo a la greca)
+  warehouseStock: {
+    type: Number,
     required: true,
     default: 0,
     min: 0
@@ -85,7 +93,7 @@ const ingredientSchema = new mongoose.Schema({
 
 // Virtual para valor total del inventario
 ingredientSchema.virtual('totalValue').get(function() {
-  return this.stock * this.costPerUnit;
+  return (this.stock + this.warehouseStock) * this.costPerUnit;
 });
 
 ingredientSchema.virtual('isComposite').get(function() {
@@ -100,6 +108,7 @@ ingredientSchema.pre('save', function(next) {
 
 // Índices para búsqueda
 ingredientSchema.index({ name: 'text' });
-ingredientSchema.index({ stock: 1, minStock: 1 }); // Para alertas de stock bajo
+ingredientSchema.index({ stock: 1, minStock: 1 });
+ingredientSchema.index({ warehouseStock: 1 }); // Para alertas de stock bajo
 
 module.exports = mongoose.model('Ingredient', ingredientSchema);

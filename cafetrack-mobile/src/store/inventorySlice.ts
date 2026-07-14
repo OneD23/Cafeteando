@@ -56,7 +56,15 @@ export const deleteIngredient = createAsyncThunk(
 export const restockIngredient = createAsyncThunk(
   'inventory/restockIngredient',
   async ({ ingredientId, quantity, reason }: { ingredientId: string; quantity: number; reason?: string }) => {
-    const response = await api.restockIngredient(ingredientId, quantity, reason);
+    const response = await api.restockIngredient(ingredientId, quantity, reason, 'warehouse');
+    return response.data;
+  }
+);
+
+export const transferIngredient = createAsyncThunk(
+  'inventory/transferIngredient',
+  async ({ ingredientId, quantity, direction, reason }: { ingredientId: string; quantity: number; direction: 'to_greca' | 'to_warehouse'; reason?: string }) => {
+    const response = await api.transferIngredient(ingredientId, quantity, direction, reason);
     return response.data;
   }
 );
@@ -183,6 +191,14 @@ const inventorySlice = createSlice({
         if (index !== -1) {
           state.ingredients[index] = action.payload;
         }
+      })
+      // transferIngredient
+      .addCase(transferIngredient.fulfilled, (state, action) => {
+        const index = state.ingredients.findIndex((i: any) => i.id === action.payload.id);
+        if (index !== -1) {
+          state.ingredients[index] = action.payload;
+        }
+        state.lowStockAlerts = state.ingredients.filter((ing: any) => ing.stock <= ing.minStock).map((ing: any) => ing.id);
       })
       // adjustStock
       .addCase(adjustStock.fulfilled, (state, action) => {

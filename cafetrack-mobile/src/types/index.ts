@@ -4,6 +4,7 @@ export interface Ingredient {
   name: string;
   unit: 'g' | 'ml' | 'unidad' | 'oz';
   stock: number;
+  warehouseStock?: number;
   minStock: number;
   costPerUnit: number;
   supplier?: string;
@@ -59,7 +60,7 @@ export interface Product {
 // Movimiento de inventario
 export interface InventoryMovement {
   id: string;
-  type: 'sale' | 'restock' | 'adjustment' | 'waste';
+  type: 'sale' | 'restock' | 'adjustment' | 'waste' | 'transfer_to_greca' | 'transfer_to_warehouse';
   ingredientId: string;
   quantity: number; // negativo para ventas/desperdicio, positivo para reposición
   date: Date;
