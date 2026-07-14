@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { SpeedInsights } from '@vercel/speed-insights/react';
+import { Analytics } from '@vercel/analytics/react';
 import { store } from './src/store';
 import { fetchIngredients, setIngredients, setMovements } from './src/store/inventorySlice';
 import { setTaxEnabled } from './src/store/cartSlice';
@@ -206,6 +207,7 @@ export default function App() {
           <AppContent />
         </NavigationContainer>
         <SpeedInsights />
+        <Analytics />
       </SafeAreaProvider>
     </Provider>
   );
