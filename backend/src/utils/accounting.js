@@ -112,18 +112,41 @@ const toDate = (value, fieldName = 'fecha') => {
   return date;
 };
 
-const toAccountingDate = (value = new Date()) => toDate(value).toISOString().slice(0, 10);
+const ACCOUNTING_TIME_ZONE = process.env.ACCOUNTING_TIME_ZONE || 'America/Santo_Domingo';
 
-const startOfDay = (dateKey) => {
-  const date = toDate(`${dateKey}T00:00:00.000Z`, 'fechaContable');
-  date.setUTCHours(0, 0, 0, 0);
-  return date;
+const toAccountingDate = (value = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: ACCOUNTING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(toDate(value));
+  const part = (type) => parts.find((item) => item.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
 };
 
+const zonedDateTimeToUtc = (dateKey, hour, minute, second, millisecond) => {
+  const [year, month, day] = String(dateKey).split('-').map(Number);
+  if (!year || !month || !day) return toDate(dateKey, 'fechaContable');
+  const targetAsUtc = Date.UTC(year, month - 1, day, hour, minute, second, 0);
+  let guess = targetAsUtc;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: ACCOUNTING_TIME_ZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date(guess));
+    const part = (type) => Number(parts.find((item) => item.type === type)?.value);
+    const representedAsUtc = Date.UTC(part('year'), part('month') - 1, part('day'), part('hour'), part('minute'), part('second'));
+    guess += targetAsUtc - representedAsUtc;
+  }
+  return new Date(guess + millisecond);
+};
+
+const startOfDay = (dateKey) => zonedDateTimeToUtc(dateKey, 0, 0, 0, 0);
+
 const endOfDay = (dateKey) => {
-  const date = startOfDay(dateKey);
-  date.setUTCHours(23, 59, 59, 999);
-  return date;
+  return zonedDateTimeToUtc(dateKey, 23, 59, 59, 999);
 };
 
 const dateRangeFromQuery = (query = {}) => {

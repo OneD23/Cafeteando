@@ -12,11 +12,11 @@ const { protect } = require('../middleware/auth');
 const { logAuditEvent } = require('../utils/audit');
 const AccountingEntry = require('../models/AccountingEntry');
 const { expandIngredientRequirements, roundQuantity } = require('../utils/ingredientComposition');
+const { toAccountingDate } = require('../utils/accounting');
 
 const router = express.Router();
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-const toAccountingDate = (value = new Date()) => new Date(value).toISOString().slice(0, 10);
 const normalizePaymentMethod = (method) => ['cash', 'card', 'transfer', 'mixed'].includes(String(method || '').toLowerCase()) ? String(method).toLowerCase() : 'cash';
 const loadIngredientById = (session = null) => async (id) => Ingredient.findById(id).session(session);
 
