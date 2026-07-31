@@ -11,8 +11,12 @@ test('accounting and reports route modules export routers for required endpoints
 });
 
 test('accounting utility validates dates, money and printable PDF HTML', () => {
-  const { toAccountingDate, assertPositiveAmount, buildPrintableHtml } = require('../src/utils/accounting');
+  const { toAccountingDate, dateRangeFromQuery, assertPositiveAmount, buildPrintableHtml } = require('../src/utils/accounting');
   assert.equal(toAccountingDate('2026-05-28T10:15:00.000Z'), '2026-05-28');
+  assert.equal(toAccountingDate('2026-05-28T02:15:00.000Z'), '2026-05-27');
+  const dayRange = dateRangeFromQuery({ date: '2026-05-28' });
+  assert.equal(dayRange.$gte.toISOString(), '2026-05-28T04:00:00.000Z');
+  assert.equal(dayRange.$lte.toISOString(), '2026-05-29T03:59:59.999Z');
   assert.equal(assertPositiveAmount(10.235), 10.24);
   const html = buildPrintableHtml({
     title: 'Factura Cafeteando',
