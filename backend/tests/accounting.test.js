@@ -54,6 +54,32 @@ test('new accounting models expose professional persistent fields and indexes', 
   assert.ok(PaymentMethodSummary.schema.path('method'));
 });
 
+test('ingredient stock can represent pending consumption below zero', async () => {
+  const Ingredient = require('../src/models/Ingredient');
+  const ingredient = new Ingredient({
+    name: 'Prueba saldo negativo',
+    unit: 'g',
+    stock: -25,
+    warehouseStock: 0,
+    minStock: 10,
+    costPerUnit: 1,
+  });
+
+  await ingredient.validate();
+  assert.equal(ingredient.stock, -25);
+});
+
+test('sales and recipe deductions preserve negative inventory instead of rejecting sales', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const salesSource = fs.readFileSync(path.join(__dirname, '../src/routes/sales.js'), 'utf8');
+  const ingredientsSource = fs.readFileSync(path.join(__dirname, '../src/routes/ingredients.js'), 'utf8');
+
+  assert.doesNotMatch(salesSource, /Stock insuficiente:.*para/);
+  assert.doesNotMatch(ingredientsSource, /Stock insuficiente para \$\{ingredient\.name\}/);
+  assert.match(ingredientsSource, /appliedToDebt/);
+});
+
 test('accounting entries preserve explicit zero debit/credit for balanced journals', async () => {
   const mongoose = require('mongoose');
   const AccountingEntry = require('../src/models/AccountingEntry');

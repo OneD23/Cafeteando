@@ -211,19 +211,28 @@ router.post('/:id/restock', protect, async (req, res) => {
 
   try {
     const { quantity, reason, location = 'warehouse' } = req.body;
+    const restockQuantity = roundQuantity(Number(quantity));
     const ingredient = await Ingredient.findById(req.params.id).session(session);
 
     if (!ingredient) {
       throw new Error('Ingrediente no encontrado');
+    }
+    if (!Number.isFinite(restockQuantity) || restockQuantity <= 0) {
+      throw new Error('quantity debe ser mayor a 0');
     }
 
     const targetLocation = location === 'greca' ? 'greca' : 'warehouse';
     const previousStock = ingredient.stock;
     const previousWarehouseStock = ingredient.warehouseStock || 0;
     if (targetLocation === 'greca') {
-      ingredient.stock = roundQuantity(ingredient.stock + quantity);
+      ingredient.stock = roundQuantity(ingredient.stock + restockQuantity);
     } else {
-      ingredient.warehouseStock = roundQuantity((ingredient.warehouseStock || 0) + quantity);
+      // Una reposición paga primero el consumo pendiente registrado en greca. Solo el
+      // sobrante pasa al almacén, así el inventario se reconcilia automáticamente.
+      const pendingConsumption = Math.max(0, -Number(ingredient.stock || 0));
+      const appliedToDebt = Math.min(pendingConsumption, restockQuantity);
+      ingredient.stock = roundQuantity(Number(ingredient.stock || 0) + appliedToDebt);
+      ingredient.warehouseStock = roundQuantity((ingredient.warehouseStock || 0) + restockQuantity - appliedToDebt);
     }
     ingredient.lastRestocked = new Date();
     await ingredient.save({ session });
@@ -232,7 +241,7 @@ router.post('/:id/restock', protect, async (req, res) => {
     await InventoryMovement.create([{
       type: 'restock',
       ingredient: ingredient._id,
-      quantity,
+      quantity: restockQuantity,
       previousStock,
       newStock: ingredient.stock,
       location: targetLocation,
@@ -248,7 +257,7 @@ router.post('/:id/restock', protect, async (req, res) => {
     req.app.get('io').emit('ingredient:restocked', {
       ingredient,
       movement: {
-        quantity,
+        quantity: restockQuantity,
         reason: reason || (targetLocation === 'warehouse' ? 'Reposición a almacén' : 'Reposición a greca')
       }
     });
@@ -434,10 +443,6 @@ router.post('/deduct', protect, async (req, res) => {
       }
 
       const deductQty = roundQuantity(row.quantity * saleQuantity);
-      if (ingredient.stock < deductQty) {
-        throw new Error(`Stock insuficiente para ${ingredient.name}`);
-      }
-
       const previousStock = ingredient.stock;
       ingredient.stock = roundQuantity(ingredient.stock - deductQty);
       await ingredient.save({ session });

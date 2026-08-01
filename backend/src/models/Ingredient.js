@@ -37,8 +37,7 @@ const ingredientSchema = new mongoose.Schema({
   stock: { 
     type: Number, 
     required: true,
-    default: 0,
-    min: 0
+    default: 0
   },
   // Stock de respaldo guardado en almacén (no se descuenta por ventas hasta transferirlo a la greca)
   warehouseStock: {

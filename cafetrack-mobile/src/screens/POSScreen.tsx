@@ -231,11 +231,11 @@ const POSScreen: React.FC = () => {
         .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
         .join("\n");
       Alert.alert(
-        "Producto incompleto",
-        `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
+        "Inventario insuficiente",
+        `Esta venta dejará inventario pendiente de reponer para ${product.name}:\n\n${missingMessage}\n\nLa cantidad quedará en negativo y se compensará con la próxima reposición.`,
         [
           { text: "Cancelar", style: "cancel" },
-          { text: "Sí, continuar", onPress: () => openOptionsForProduct(product, true) },
+          { text: "Vender de todos modos", onPress: () => openOptionsForProduct(product, true) },
         ]
       );
       return;

@@ -134,11 +134,6 @@ export const processSale = createAsyncThunk(
 
           if (!ingredient) continue;
 
-          if (ingredient.stock < needed) {
-            if (item.allowIncompleteRecipe) continue;
-            throw new Error(`No hay suficiente stock para: ${item.name}`);
-          }
-
           totalCost += (ingredient.costPerUnit || 0) * needed;
         }
 
