@@ -231,11 +231,11 @@ const POSScreen: React.FC = () => {
         .map((ing: any) => `Faltan ${formatIngredientQuantity(ing.missing, ing.unit)} de ${ing.name}`)
         .join("\n");
       Alert.alert(
-        "Producto incompleto",
-        `Faltan ingredientes para preparar ${product.name}:\n\n${missingMessage}\n\n¿Quieres prepararlo y venderlo de todos modos?`,
+        "Inventario insuficiente",
+        `Esta venta dejará inventario pendiente de reponer para ${product.name}:\n\n${missingMessage}\n\nLa cantidad quedará en negativo y se compensará con la próxima reposición.`,
         [
           { text: "Cancelar", style: "cancel" },
-          { text: "Sí, continuar", onPress: () => openOptionsForProduct(product, true) },
+          { text: "Vender de todos modos", onPress: () => openOptionsForProduct(product, true) },
         ]
       );
       return;
@@ -293,7 +293,12 @@ const POSScreen: React.FC = () => {
       await persistSaleForClient({
         saleId: result.saleId,
         customerName: paymentData.customer?.name,
+        paymentMethod: paymentData.method,
+        subtotal: saleTotals.subtotal,
+        discount: saleTotals.discount,
+        tax: saleTotals.tax,
         total: saleTotals.total,
+        synced: result.synced,
         items: saleItems.map((i: any) => ({ id: i.id, name: i.name, qty: i.quantity, price: i.price, selectedOptions: i.selectedOptions || [] })),
         date: new Date().toISOString(),
       });
@@ -313,7 +318,7 @@ const POSScreen: React.FC = () => {
   };
 
 
-  const persistSaleForClient = async (payload: { saleId: string; customerName?: string; total: number; items: any[]; date: string }) => {
+  const persistSaleForClient = async (payload: { saleId: string; customerName?: string; paymentMethod: string; subtotal: number; discount: number; tax: number; total: number; synced: boolean; items: any[]; date: string }) => {
     const raw = await AsyncStorage.getItem(SALES_STORAGE_KEY);
     const history = raw ? JSON.parse(raw) : [];
     history.unshift(payload);

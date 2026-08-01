@@ -12,11 +12,11 @@ const { protect } = require('../middleware/auth');
 const { logAuditEvent } = require('../utils/audit');
 const AccountingEntry = require('../models/AccountingEntry');
 const { expandIngredientRequirements, roundQuantity } = require('../utils/ingredientComposition');
+const { toAccountingDate } = require('../utils/accounting');
 
 const router = express.Router();
 
 const roundMoney = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
-const toAccountingDate = (value = new Date()) => new Date(value).toISOString().slice(0, 10);
 const normalizePaymentMethod = (method) => ['cash', 'card', 'transfer', 'mixed'].includes(String(method || '').toLowerCase()) ? String(method).toLowerCase() : 'cash';
 const loadIngredientById = (session = null) => async (id) => Ingredient.findById(id).session(session);
 
@@ -108,7 +108,8 @@ router.post('/', protect, async (req, res) => {
       }
     }
 
-    // Validar stock de ingredientes para cada item, expandiendo ingredientes compuestos
+    // Cargar y validar las recetas. El stock de greca puede quedar negativo: representa
+    // consumo pendiente de reponer y no debe bloquear una venta real.
     for (const item of items) {
       const product = await Product.findById(item.productId).session(session);
       
@@ -119,10 +120,7 @@ router.post('/', protect, async (req, res) => {
 
       const { requirements } = await expandIngredientRequirements(recipe.items, { loadIngredient: loadIngredientById(session) });
       for (const row of requirements) {
-        const needed = roundQuantity(row.quantity * item.quantity);
-        if (!row.ingredient || row.ingredient.stock < needed) {
-          throw new Error(`Stock insuficiente: ${row.ingredient?.name || 'Ingrediente'} para ${product.name}`);
-        }
+        if (!row.ingredient) throw new Error(`Ingrediente no encontrado para ${product.name}`);
       }
     }
 

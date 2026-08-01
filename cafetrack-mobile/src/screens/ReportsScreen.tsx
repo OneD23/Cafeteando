@@ -30,7 +30,13 @@ type Filters = {
   movementType: string;
 };
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+const dateKey = (value = new Date()) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const todayKey = () => dateKey();
 const money = (value: any) => `$${Number(value || 0).toFixed(2)}`;
 const formatDate = (value?: string) => (value ? new Date(value).toLocaleString() : 'N/D');
 const emptyFilters = (): Filters => ({
@@ -77,8 +83,14 @@ const expenseCategories = ['hielo', 'vasos', 'servilletas', 'ingredientes', 'tra
 
 
 const dateInRange = (dateValue: string, startDate: string, endDate: string) => {
-  const day = new Date(dateValue).toISOString().slice(0, 10);
+  const day = dateKey(new Date(dateValue));
   return day >= startDate && day <= endDate;
+};
+
+const uniqueRows = (serverRows: any[], localRows: any[], getKey: (row: any) => string) => {
+  const rows = new Map<string, any>();
+  [...localRows, ...serverRows].forEach((row) => rows.set(getKey(row), row));
+  return Array.from(rows.values());
 };
 
 
@@ -223,9 +235,9 @@ export const ReportsScreen: React.FC = () => {
         api.getReport('range', { startDate: filters.startDate, endDate: filters.endDate }),
       ]);
       setDashboard({ ...local.dashboard, ...(dashboardRes?.data || {}) });
-      setInvoices([...(invoicesRes?.data || []), ...local.invoices.filter((invoice: any) => invoice.status === 'pendiente')]);
+      setInvoices(uniqueRows(invoicesRes?.data || [], local.invoices, (row) => String(row.invoiceNumber || row.id || row._id)));
       setJournal(journalRes?.data || local.journal);
-      setMovements([...(movementsRes?.data || []), ...local.movements]);
+      setMovements(uniqueRows(movementsRes?.data || [], local.movements, (row) => String(row.reference || row.id || row._id)));
       setMovementTotals(movementsRes?.totalsByType || local.movementTotals);
       const openCash = cashRes?.data || local.currentCash;
       setCurrentCash(openCash);
@@ -256,6 +268,13 @@ export const ReportsScreen: React.FC = () => {
   }, [loadData]);
 
   const setFilter = (key: keyof Filters, value: string) => setFilters((prev) => ({ ...prev, [key]: value }));
+
+  const moveSelectedDay = (days: number) => {
+    const selected = new Date(`${filters.endDate || todayKey()}T12:00:00`);
+    selected.setDate(selected.getDate() + days);
+    const next = dateKey(selected);
+    setFilters((prev) => ({ ...prev, startDate: next, endDate: next }));
+  };
 
   const buildRowsHtml = (title: string, rows: any[]) => `
     <html><head><meta charset="utf-8" /><style>
@@ -355,6 +374,12 @@ export const ReportsScreen: React.FC = () => {
   const FilterPanel = () => (
     <View style={styles.filterCard}>
       <Text style={styles.sectionTitle}>Filtros contables</Text>
+      <Text style={styles.periodText}>Período seleccionado: {filters.startDate} → {filters.endDate}</Text>
+      <View style={styles.chipRow}>
+        <TouchableOpacity style={styles.dayButton} onPress={() => moveSelectedDay(-1)}><Text style={styles.secondaryButtonText}>‹ Día anterior</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.dayButton} onPress={() => setFilters(emptyFilters())}><Text style={styles.secondaryButtonText}>Hoy</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.dayButton} onPress={() => moveSelectedDay(1)}><Text style={styles.secondaryButtonText}>Día siguiente ›</Text></TouchableOpacity>
+      </View>
       <View style={styles.filterGrid}>
         <TextInput style={styles.input} value={filters.startDate} onChangeText={(v) => setFilter('startDate', v)} placeholder="Inicio YYYY-MM-DD" />
         <TextInput style={styles.input} value={filters.endDate} onChangeText={(v) => setFilter('endDate', v)} placeholder="Fin YYYY-MM-DD" />
@@ -472,7 +497,7 @@ export const ReportsScreen: React.FC = () => {
           <View style={styles.sectionCard}>
             <Text style={styles.sectionTitle}>Reportes profesionales</Text>
             <View style={styles.reportGrid}>{[
-              ['Reporte diario', report?.summary?.salesTotal], ['Reporte mensual', report?.summary?.netResult], ['Facturas', invoices.length], ['Métodos de pago', report?.payments?.length], ['Gastos', report?.summary?.expensesTotal], ['Productos vendidos', report?.summary?.productsSold],
+              ['Ventas del período', report?.summary?.salesTotal], ['Resultado del período', report?.summary?.netResult], ['Facturas', invoices.length], ['Métodos de pago', report?.payments?.length], ['Gastos', report?.summary?.expensesTotal], ['Productos vendidos', report?.summary?.productsSold],
             ].map(([label, value]) => <View key={String(label)} style={styles.reportCard}><Text style={styles.kpiLabel}>{label}</Text><Text style={styles.kpiValue}>{typeof value === 'number' ? money(value) : String(value || 0)}</Text></View>)}</View>
             <TouchableOpacity style={styles.primaryButton} onPress={() => printRows('Reporte general', invoices)}><Text style={styles.primaryButtonText}>Descargar PDF / Imprimir reporte general</Text></TouchableOpacity>
           </View>
@@ -496,6 +521,8 @@ const styles = StyleSheet.create({
   activeTabText: { color: '#1a0f0a' },
   content: { padding: 14, backgroundColor: '#1a0f0a' },
   filterCard: { backgroundColor: '#2c1810', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#4a3428' },
+  periodText: { color: '#d4a574', fontWeight: '800', marginBottom: 4 },
+  dayButton: { flexGrow: 1, borderWidth: 1, borderColor: '#d4a574', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, alignItems: 'center', backgroundColor: '#30180f' },
   filterGrid: { gap: 10 },
   input: { backgroundColor: '#30180f', borderWidth: 1, borderColor: '#4a3428', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, color: '#f5f1e8', marginBottom: 8 },
   sectionCard: { backgroundColor: '#2c1810', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#4a3428' },

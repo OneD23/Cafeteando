@@ -134,11 +134,6 @@ export const processSale = createAsyncThunk(
 
           if (!ingredient) continue;
 
-          if (ingredient.stock < needed) {
-            if (item.allowIncompleteRecipe) continue;
-            throw new Error(`No hay suficiente stock para: ${item.name}`);
-          }
-
           totalCost += (ingredient.costPerUnit || 0) * needed;
         }
 
@@ -180,8 +175,10 @@ export const processSale = createAsyncThunk(
     await addSaleToLocalCashSession(payload.paymentMethod, saleTotal);
 
     let synced = false;
+    let persistedSaleId = saleId;
     try {
-      await api.createSale(salePayload);
+      const response = await api.createSale(salePayload);
+      persistedSaleId = response?.data?.saleId || saleId;
       synced = true;
     } catch (error: any) {
       if (error?.status && !isServerStockDisagreement(error)) {
@@ -193,7 +190,7 @@ export const processSale = createAsyncThunk(
       });
     }
     
-    return { success: true, timestamp: new Date().toISOString(), saleId, synced };
+    return { success: true, timestamp: new Date().toISOString(), saleId: persistedSaleId, synced };
   }
 );
 

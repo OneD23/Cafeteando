@@ -120,7 +120,9 @@ const inventorySlice = createSlice({
           const deductQty = roundQuantity(ri.quantity * quantity);
           const previousStock = ingredient.stock;
 
-          ingredient.stock = roundQuantity(Math.max(0, ingredient.stock - deductQty));
+          // El saldo negativo es una deuda de inventario que la próxima reposición
+          // compensará, en vez de perder consumos al llegar a cero.
+          ingredient.stock = roundQuantity(ingredient.stock - deductQty);
 
           state.movements.push({
             id: `mov-${Date.now()}-${ri.ingredientId}`,

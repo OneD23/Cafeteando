@@ -11,8 +11,12 @@ test('accounting and reports route modules export routers for required endpoints
 });
 
 test('accounting utility validates dates, money and printable PDF HTML', () => {
-  const { toAccountingDate, assertPositiveAmount, buildPrintableHtml } = require('../src/utils/accounting');
+  const { toAccountingDate, dateRangeFromQuery, assertPositiveAmount, buildPrintableHtml } = require('../src/utils/accounting');
   assert.equal(toAccountingDate('2026-05-28T10:15:00.000Z'), '2026-05-28');
+  assert.equal(toAccountingDate('2026-05-28T02:15:00.000Z'), '2026-05-27');
+  const dayRange = dateRangeFromQuery({ date: '2026-05-28' });
+  assert.equal(dayRange.$gte.toISOString(), '2026-05-28T04:00:00.000Z');
+  assert.equal(dayRange.$lte.toISOString(), '2026-05-29T03:59:59.999Z');
   assert.equal(assertPositiveAmount(10.235), 10.24);
   const html = buildPrintableHtml({
     title: 'Factura Cafeteando',
@@ -48,6 +52,32 @@ test('new accounting models expose professional persistent fields and indexes', 
   assert.ok(Sale.schema.path('idempotencyKey'));
   assert.ok(Sale.schema.path('cashRegister'));
   assert.ok(PaymentMethodSummary.schema.path('method'));
+});
+
+test('ingredient stock can represent pending consumption below zero', async () => {
+  const Ingredient = require('../src/models/Ingredient');
+  const ingredient = new Ingredient({
+    name: 'Prueba saldo negativo',
+    unit: 'g',
+    stock: -25,
+    warehouseStock: 0,
+    minStock: 10,
+    costPerUnit: 1,
+  });
+
+  await ingredient.validate();
+  assert.equal(ingredient.stock, -25);
+});
+
+test('sales and recipe deductions preserve negative inventory instead of rejecting sales', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const salesSource = fs.readFileSync(path.join(__dirname, '../src/routes/sales.js'), 'utf8');
+  const ingredientsSource = fs.readFileSync(path.join(__dirname, '../src/routes/ingredients.js'), 'utf8');
+
+  assert.doesNotMatch(salesSource, /Stock insuficiente:.*para/);
+  assert.doesNotMatch(ingredientsSource, /Stock insuficiente para \$\{ingredient\.name\}/);
+  assert.match(ingredientsSource, /appliedToDebt/);
 });
 
 test('accounting entries preserve explicit zero debit/credit for balanced journals', async () => {
